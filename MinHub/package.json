@@ -37,8 +37,12 @@
     "react-native-screens": "~4.10.0",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
+<<<<<<< HEAD
     "@react-native-community/datetimepicker": "8.3.0",
     "expo-file-system": "~18.1.9"
+=======
+    "@react-native-async-storage/async-storage": "2.1.2"
+>>>>>>> 21f3c904e3e4d44384ec359cd5df78ebb0df7a2d
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
