@@ -16,7 +16,7 @@ interface Note {
   content: string;
   updatedAt: string;
 }
-
+// Simu
 const NOTES_STORAGE_KEY = '@notesApp_notes_v1';
 
 export default function NotesScreen() {
@@ -34,7 +34,7 @@ export default function NotesScreen() {
         setNotes(parsedNotes);
       } else {
         setNotes([]);
-      }
+      }// Simulazione automatica
     } catch (error) {
       console.error('Failed to load notes.', error);
       setNotes([]);
