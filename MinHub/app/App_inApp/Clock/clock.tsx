@@ -19,7 +19,7 @@ import * as FileSystem from 'expo-file-system';
 type Alarm = {
   id: string;
   name: string;
-  time: Date;
+  time: Date | null;
   active: boolean;
 };
 
@@ -30,18 +30,14 @@ export default function ClockScreen() {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [alarmName, setAlarmName] = useState('');
-  const [alarmTime, setAlarmTime] = useState(new Date());
+  const [alarmTime, setAlarmTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const { width, height } = Dimensions.get('window');
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(getFormattedTime());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+    // Set the current time once when the component mounts
+    setCurrentTime(getFormattedTime());
+    // Load alarms from the file on mount
     ensureAlarmFileExists().then(loadAlarmsFromFile);
   }, []);
 
@@ -51,7 +47,10 @@ export default function ClockScreen() {
 
   function getFormattedTime() {
     const now = new Date();
-    return now.toLocaleTimeString();
+    return now.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   async function ensureAlarmFileExists() {
@@ -71,7 +70,7 @@ export default function ClockScreen() {
       const parsed = JSON.parse(content);
       const parsedAlarms: Alarm[] = parsed.map((alarm: any) => ({
         ...alarm,
-        time: new Date(alarm.time),
+        time: alarm.time ? new Date(alarm.time) : null,
       }));
       setAlarms(parsedAlarms);
     } catch (err) {
@@ -96,7 +95,7 @@ export default function ClockScreen() {
     };
     setAlarms([...alarms, newAlarm]);
     setAlarmName('');
-    setAlarmTime(new Date());
+    setAlarmTime(null);
     setModalVisible(false);
   }
 
@@ -110,12 +109,10 @@ export default function ClockScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Clock display */}
       <View style={styles.header}>
         <Text style={styles.clockText}>{currentTime}</Text>
       </View>
 
-      {/* Alarm list */}
       <View style={styles.body}>
         <Text style={styles.title}>Wake Up Calls</Text>
         <FlatList
@@ -126,10 +123,10 @@ export default function ClockScreen() {
               <View>
                 <Text style={styles.alarmName}>{item.name}</Text>
                 <Text style={styles.alarmTime}>
-                  {item.time.toLocaleTimeString([], {
+                  {item.time ? item.time.toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
-                  })}
+                  }) : 'Set time'}
                 </Text>
               </View>
               <Switch
@@ -141,15 +138,17 @@ export default function ClockScreen() {
         />
       </View>
 
-      {/* "+" button */}
       <TouchableOpacity
         style={styles.floatingButton}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setAlarmName(''); // Clear alarm name
+          setAlarmTime(null); // Reset time to null (Not set)
+          setModalVisible(true); // Show the modal
+        }}
       >
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>
 
-      {/* Add Alarm Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -170,25 +169,30 @@ export default function ClockScreen() {
               onPress={() => setShowTimePicker(true)}
             >
               <Text style={styles.timePickerText}>
-                Select time:{' '}
-                {alarmTime.toLocaleTimeString([], {
+                Select time: {alarmTime ? alarmTime.toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
-                })}
+                }) : 'Not set'}
               </Text>
             </TouchableOpacity>
+
             {showTimePicker && (
               <DateTimePicker
-                value={alarmTime}
+                value={alarmTime || new Date()}
                 mode="time"
                 is24Hour={true}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(event, selectedDate) => {
-                  setShowTimePicker(false);
-                  if (selectedDate) setAlarmTime(selectedDate);
+                  if (event.type === 'set' && selectedDate) {
+                    setAlarmTime(selectedDate); // Only set if selected
+                  } else if (event.type === 'dismissed') {
+                    setAlarmTime(null); // Reset to null if canceled
+                  }
+                  setShowTimePicker(false); // Always close the picker
                 }}
               />
             )}
+
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelButton}>Cancel</Text>
