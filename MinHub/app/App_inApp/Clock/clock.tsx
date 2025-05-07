@@ -11,111 +11,52 @@ import {
   Switch,
   Platform,
   Dimensions,
+  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-
-type Alarm = {
-  id: string;
-  name: string;
-  time: Date;
-  active: boolean;
-};
-
-const ALARM_FILE_PATH = FileSystem.documentDirectory + 'alarms.json';
+import { useAlarms } from './alarm';  // Import the hook
 
 export default function ClockScreen() {
   const [currentTime, setCurrentTime] = useState(getFormattedTime());
-  const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [alarmName, setAlarmName] = useState('');
-  const [alarmTime, setAlarmTime] = useState(new Date());
+  const [alarmTime, setAlarmTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [editingAlarmId, setEditingAlarmId] = useState<string | null>(null);
   const { width, height } = Dimensions.get('window');
+
+  // Use the alarms hook
+  const {
+    alarms,
+    handleAddOrUpdateAlarm,
+    handleToggleAlarm,
+    handleDeleteAlarm,
+    checkAlarms,
+  } = useAlarms();
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(getFormattedTime());
-    }, 1000);
+      checkAlarms();
+    }, 1000); // Check every second
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    ensureAlarmFileExists().then(loadAlarmsFromFile);
-  }, []);
-
-  useEffect(() => {
-    saveAlarmsToFile();
   }, [alarms]);
 
   function getFormattedTime() {
     const now = new Date();
-    return now.toLocaleTimeString();
-  }
-
-  async function ensureAlarmFileExists() {
-    try {
-      const fileInfo = await FileSystem.getInfoAsync(ALARM_FILE_PATH);
-      if (!fileInfo.exists) {
-        await FileSystem.writeAsStringAsync(ALARM_FILE_PATH, '[]');
-      }
-    } catch (err) {
-      console.error('Error ensuring file:', err);
-    }
-  }
-
-  async function loadAlarmsFromFile() {
-    try {
-      const content = await FileSystem.readAsStringAsync(ALARM_FILE_PATH);
-      const parsed = JSON.parse(content);
-      const parsedAlarms: Alarm[] = parsed.map((alarm: any) => ({
-        ...alarm,
-        time: new Date(alarm.time),
-      }));
-      setAlarms(parsedAlarms);
-    } catch (err) {
-      console.error('Failed to load alarms:', err);
-    }
-  }
-
-  async function saveAlarmsToFile() {
-    try {
-      await FileSystem.writeAsStringAsync(ALARM_FILE_PATH, JSON.stringify(alarms));
-    } catch (err) {
-      console.error('Failed to save alarms:', err);
-    }
-  }
-
-  function handleAddAlarm() {
-    const newAlarm: Alarm = {
-      id: Date.now().toString(),
-      name: alarmName || 'Wake Up',
-      time: alarmTime,
-      active: true,
-    };
-    setAlarms([...alarms, newAlarm]);
-    setAlarmName('');
-    setAlarmTime(new Date());
-    setModalVisible(false);
-  }
-
-  function handleToggleAlarm(id: string) {
-    setAlarms((prev) =>
-      prev.map((alarm) =>
-        alarm.id === id ? { ...alarm, active: !alarm.active } : alarm
-      )
-    );
+    return now.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Clock display */}
       <View style={styles.header}>
         <Text style={styles.clockText}>{currentTime}</Text>
       </View>
 
-      {/* Alarm list */}
       <View style={styles.body}>
         <Text style={styles.title}>Wake Up Calls</Text>
         <FlatList
@@ -126,30 +67,48 @@ export default function ClockScreen() {
               <View>
                 <Text style={styles.alarmName}>{item.name}</Text>
                 <Text style={styles.alarmTime}>
-                  {item.time.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {item.time
+                    ? item.time.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Set time'}
                 </Text>
               </View>
-              <Switch
-                value={item.active}
-                onValueChange={() => handleToggleAlarm(item.id)}
-              />
+              <View style={styles.alarmActions}>
+                <Switch
+                  value={item.active}
+                  onValueChange={() => handleToggleAlarm(item.id)}
+                />
+                <TouchableOpacity onPress={() => handleDeleteAlarm(item.id)}>
+                  <Text style={styles.deleteButton}>x</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  setAlarmName(item.name);
+                  setAlarmTime(item.time);
+                  setEditingAlarmId(item.id);
+                  setModalVisible(true);
+                }}>
+                  <Text style={styles.editButton}>🔧</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
       </View>
 
-      {/* "+" button */}
       <TouchableOpacity
         style={styles.floatingButton}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setAlarmName('');
+          setAlarmTime(null);
+          setEditingAlarmId(null);
+          setModalVisible(true);
+        }}
       >
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>
 
-      {/* Add Alarm Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -158,7 +117,9 @@ export default function ClockScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Wake Up Call</Text>
+            <Text style={styles.modalTitle}>
+              {editingAlarmId ? 'Edit Wake Up Call' : 'New Wake Up Call'}
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Alarm name"
@@ -171,30 +132,42 @@ export default function ClockScreen() {
             >
               <Text style={styles.timePickerText}>
                 Select time:{' '}
-                {alarmTime.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {alarmTime
+                  ? alarmTime.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'Not set'}
               </Text>
             </TouchableOpacity>
+
             {showTimePicker && (
               <DateTimePicker
-                value={alarmTime}
+                value={alarmTime || new Date()}
                 mode="time"
                 is24Hour={true}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(event, selectedDate) => {
+                  if (event.type === 'set' && selectedDate) {
+                    setAlarmTime(selectedDate);
+                  } else if (event.type === 'dismissed') {
+                    setAlarmTime(null);
+                  }
                   setShowTimePicker(false);
-                  if (selectedDate) setAlarmTime(selectedDate);
                 }}
               />
             )}
+
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelButton}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleAddAlarm}>
-                <Text style={styles.addButton}>Add</Text>
+              <TouchableOpacity
+                onPress={() => handleAddOrUpdateAlarm(editingAlarmId, alarmName, alarmTime)}
+              >
+                <Text style={styles.addButton}>
+                  {editingAlarmId ? 'Update' : 'Add'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -220,6 +193,20 @@ const styles = StyleSheet.create({
   },
   alarmName: { fontSize: 18, fontWeight: '500' },
   alarmTime: { fontSize: 16, color: '#666' },
+  alarmActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deleteButton: {
+    fontSize: 24,
+    color: '#ff3b30',
+    marginLeft: 10,
+  },
+  editButton: {
+    fontSize: 24,
+    color: '#007AFF',
+  },
   floatingButton: {
     backgroundColor: '#007AFF',
     width: 60,
