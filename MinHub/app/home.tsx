@@ -5,7 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Home Page</Text>
+      <Text style={styles.title}>MinHub Home</Text>
       <View style={styles.iconContainer}>
         <Link href="/App_inApp/ToDoList/toDoList" asChild>
           <TouchableOpacity style={styles.iconButton}>
@@ -13,16 +13,21 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
-        <Link href="/App_inApp/Clock/clock" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Clock</Text>
-          </TouchableOpacity>
-        </Link>
-
-        {/* New Link for Notes App */}
         <Link href="/App_inApp/Notes/notes" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Notes</Text>
+          </TouchableOpacity>
+        </Link>
+
+        <Link href="/App_inApp/ShoppingList/shoppinglist" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Shopping Lists</Text>
+          </TouchableOpacity>
+        </Link>
+
+        <Link href="/App_inApp/Clock/clock" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Clock</Text>
           </TouchableOpacity>
         </Link>
       </View>
@@ -39,7 +44,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f4f8',
   },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 50,
     color: '#2c3e50',
@@ -47,27 +52,30 @@ const styles = StyleSheet.create({
   iconContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '90%',
-    flexWrap: 'wrap', // Allows items to wrap if too many
+    width: '95%',
+    flexWrap: 'wrap',
   },
   iconButton: {
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 20,
     borderWidth: 1,
-    borderColor: '#bdc3c7',
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    minWidth: 100, // Ensure buttons have a decent width
-    margin: 10, // Add some margin around buttons
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    borderColor: '#d0dae0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    minWidth: 120,
+    height: 100,
+    margin: 10,
+    elevation: 3,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 3,
   },
   iconText: {
-    marginTop: 5,
-    fontSize: 16,
+    fontSize: 15,
     color: '#34495e',
+    textAlign: 'center',
   },
 });
