@@ -2,47 +2,66 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Modal,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+
+// Interfacce (assicurati siano consistenti o importate)
+interface ShoppingListItem {
+  id: string;
+  name: string;
+  quantity: string;
+  unit: string;
+  category: string;
+  notes: string;
+  isPurchased: boolean;
+  createdAt: string;
+  price?: number; // Manteniamo price per coerenza, anche se potrebbe non essere usato nei template
+}
 
 interface ShoppingList {
   id: string;
   name: string;
+  items: ShoppingListItem[];
   createdAt: string;
-  itemCount?: number; 
+  updatedAt: string;
 }
 
-const SHOPPING_LISTS_STORAGE_KEY = '@minhub_shoppingLists_v1';
+// Alias per chiarezza, la struttura è la stessa
+type ShoppingListTemplate = ShoppingList;
 
-export default function ShoppingListsScreen() {
+const SHOPPING_LISTS_STORAGE_KEY = '@minhub_shoppingLists_v1';
+const TEMPLATES_STORAGE_KEY = '@minhub_shoppingTemplates_v1'; // Nuova chiave per i template
+
+export default function ShoppingListScreen() {
   const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>([]);
+  const [templates, setTemplates] = useState<ShoppingListTemplate[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
   const router = useRouter();
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [listModalVisible, setListModalVisible] = useState(false);
+  const [templateSelectModalVisible, setTemplateSelectModalVisible] = useState(false);
+
   const [currentListName, setCurrentListName] = useState('');
   const [editingList, setEditingList] = useState<ShoppingList | null>(null);
 
+  // --- Caricamento Liste Spesa ---
   const loadShoppingLists = useCallback(async () => {
     setIsLoading(true);
     try {
       const storedLists = await AsyncStorage.getItem(SHOPPING_LISTS_STORAGE_KEY);
-      if (storedLists) {
-        const parsedLists: ShoppingList[] = JSON.parse(storedLists);
-        parsedLists.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setShoppingLists(parsedLists);
-      } else {
-        setShoppingLists([]);
-      }
+      const parsedLists = storedLists ? JSON.parse(storedLists) : [];
+      setShoppingLists(parsedLists.sort((a: ShoppingList, b: ShoppingList) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()));
     } catch (error) {
       console.error('Failed to load shopping lists.', error);
       Alert.alert('Error', 'Could not load shopping lists.');
@@ -58,17 +77,36 @@ export default function ShoppingListsScreen() {
     }, [loadShoppingLists])
   );
 
+  // --- Salvataggio Liste Spesa ---
   const saveShoppingLists = async (listsToSave: ShoppingList[]) => {
     try {
-      await AsyncStorage.setItem(SHOPPING_LISTS_STORAGE_KEY, JSON.stringify(listsToSave));
-      setShoppingLists(listsToSave.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      const sortedLists = listsToSave.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+      await AsyncStorage.setItem(SHOPPING_LISTS_STORAGE_KEY, JSON.stringify(sortedLists));
+      setShoppingLists(sortedLists); // Aggiorna lo stato locale
     } catch (error) {
       console.error('Failed to save shopping lists.', error);
       Alert.alert('Error', 'Could not save shopping lists.');
     }
   };
 
-  const handleOpenModal = (list?: ShoppingList) => {
+  // --- Caricamento Templates (solo quando serve) ---
+   const loadTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const storedTemplates = await AsyncStorage.getItem(TEMPLATES_STORAGE_KEY);
+      const parsedTemplates = storedTemplates ? JSON.parse(storedTemplates) : [];
+      setTemplates(parsedTemplates.sort((a: ShoppingListTemplate, b: ShoppingListTemplate) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.error('Failed to load templates.', error);
+      Alert.alert('Error', 'Could not load templates.');
+      setTemplates([]);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  // --- Gestione Modale Lista (Crea/Modifica Nome) ---
+  const handleOpenListModal = (list?: ShoppingList) => {
     if (list) {
       setEditingList(list);
       setCurrentListName(list.name);
@@ -76,7 +114,7 @@ export default function ShoppingListsScreen() {
       setEditingList(null);
       setCurrentListName('');
     }
-    setModalVisible(true);
+    setListModalVisible(true);
   };
 
   const handleSaveList = () => {
@@ -86,21 +124,24 @@ export default function ShoppingListsScreen() {
     }
 
     let updatedLists;
+    const now = new Date().toISOString();
+
     if (editingList) {
       updatedLists = shoppingLists.map(list =>
-        list.id === editingList.id ? { ...list, name: currentListName.trim() } : list
+        list.id === editingList.id ? { ...list, name: currentListName.trim(), updatedAt: now } : list
       );
     } else {
       const newList: ShoppingList = {
         id: Date.now().toString(),
         name: currentListName.trim(),
-        createdAt: new Date().toISOString(),
-        itemCount: 0,
+        createdAt: now,
+        updatedAt: now,
+        items: [],
       };
-      updatedLists = [...shoppingLists, newList];
+      updatedLists = [newList, ...shoppingLists];
     }
     saveShoppingLists(updatedLists);
-    setModalVisible(false);
+    setListModalVisible(false);
     setCurrentListName('');
     setEditingList(null);
   };
@@ -108,7 +149,7 @@ export default function ShoppingListsScreen() {
   const handleDeleteList = (listId: string) => {
     Alert.alert(
       'Delete List',
-      'Are you sure you want to delete this shopping list and all its items?',
+      'Are you sure you want to delete this shopping list?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -123,32 +164,115 @@ export default function ShoppingListsScreen() {
     );
   };
 
+  // --- Funzionalità Template ---
+  const handleSaveAsTemplate = async (listToSave: ShoppingList) => {
+    Alert.alert(
+        'Save as Template',
+        `Do you want to save "${listToSave.name}" as a template?`,
+        [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Save',
+                onPress: async () => {
+                    setIsLoading(true); // Mostra caricamento
+                    try {
+                        const storedTemplates = await AsyncStorage.getItem(TEMPLATES_STORAGE_KEY);
+                        let templates: ShoppingListTemplate[] = storedTemplates ? JSON.parse(storedTemplates) : [];
 
-const navigateToDetail = (list: ShoppingList) => {
-    router.push({
-      pathname: '/App_inApp/ShoppingList/shoppinglistdetail.tsx/[listId]', 
-      params: { listId: list.id, listName: list.name },
-    });
+                        // Pulisci gli items: resetta 'isPurchased' e rimuovi 'price'
+                        const cleanedItems = listToSave.items.map(({ price, isPurchased, ...itemData }) => ({
+                            ...itemData,
+                            isPurchased: false, // Sempre non acquistato nel template
+                        }));
+
+                        const newTemplate: ShoppingListTemplate = {
+                            id: `template-${Date.now().toString()}`, // ID univoco per template
+                            name: listToSave.name, // Usa il nome della lista
+                            items: cleanedItems,
+                            createdAt: new Date().toISOString(), // Timestamp salvataggio template
+                            updatedAt: new Date().toISOString(),
+                        };
+
+                        // Opzionale: controlla se esiste già un template con lo stesso nome
+                        const existingIndex = templates.findIndex(t => t.name === newTemplate.name);
+                        if (existingIndex > -1) {
+                             // Sovrascrivi o chiedi conferma? Per ora sovrascriviamo
+                            templates[existingIndex] = newTemplate;
+                            Alert.alert('Template Updated', `Template "${newTemplate.name}" has been updated.`);
+                        } else {
+                            templates.push(newTemplate);
+                            Alert.alert('Template Saved', `"${newTemplate.name}" saved as a template.`);
+                        }
+
+                        await AsyncStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+                    } catch (error) {
+                        console.error('Failed to save template.', error);
+                        Alert.alert('Error', 'Could not save the template.');
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+            }
+        ]
+    );
   };
 
+  const handleOpenTemplateSelectModal = () => {
+      loadTemplates(); // Carica i template quando apri il modale
+      setTemplateSelectModalVisible(true);
+  };
+
+  const handleCreateListFromTemplate = (template: ShoppingListTemplate) => {
+      const now = new Date().toISOString();
+      const itemsFromTemplate = template.items.map(item => ({
+          ...item,
+          id: `item-${Date.now().toString()}-${Math.random()}`, // Nuovo ID per l'item nella nuova lista
+          isPurchased: false, // Assicurati sia false
+          // price: item.price // Decidi se mantenere i prezzi dal template
+      }));
+
+      const newList: ShoppingList = {
+        id: Date.now().toString(),
+        name: template.name, // Potresti aggiungere "(Copy)" o data?
+        createdAt: now,
+        updatedAt: now,
+        items: itemsFromTemplate,
+      };
+      saveShoppingLists([newList, ...shoppingLists]);
+      setTemplateSelectModalVisible(false);
+  };
+
+  // --- Navigazione e Rendering ---
+  const navigateToDetail = (list: ShoppingList) => {
+     router.push({ pathname: `/App_inApp/ShoppingList/shoppinglistdetail/[listId]`, params: { listId: list.id, listName: list.name } });
+  };
 
   const renderListItem = ({ item }: { item: ShoppingList }) => (
     <TouchableOpacity style={styles.listItem} onPress={() => navigateToDetail(item)}>
       <View style={styles.listItemTextContainer}>
         <Text style={styles.listItemName}>{item.name}</Text>
         <Text style={styles.listItemSubText}>
-            { }
-            Created: {new Date(item.createdAt).toLocaleDateString()}
+            {item.items?.length || 0} items - Updated: {new Date(item.updatedAt || item.createdAt).toLocaleDateString()}
         </Text>
       </View>
       <View style={styles.listItemActions}>
-        <TouchableOpacity onPress={() => handleOpenModal(item)} style={styles.actionButton}>
+        <TouchableOpacity onPress={() => handleSaveAsTemplate(item)} style={styles.actionButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.actionButtonText}>➕</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleOpenListModal(item)} style={styles.actionButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.actionButtonText}>✏️</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteList(item.id)} style={[styles.actionButton, styles.deleteAction]}>
+        <TouchableOpacity onPress={() => handleDeleteList(item.id)} style={[styles.actionButton, styles.deleteAction]} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.actionButtonText}>🗑️</Text>
         </TouchableOpacity>
       </View>
+    </TouchableOpacity>
+  );
+
+  const renderTemplateItem = ({ item }: { item: ShoppingListTemplate }) => (
+    <TouchableOpacity style={styles.templateItem} onPress={() => handleCreateListFromTemplate(item)}>
+      <Text style={styles.templateItemText}>{item.name}</Text>
+      <Text style={styles.templateItemSubText}>{item.items?.length || 0} items</Text>
     </TouchableOpacity>
   );
 
@@ -164,18 +288,23 @@ const navigateToDetail = (list: ShoppingList) => {
     <SafeAreaView style={styles.container}>
         <Stack.Screen
             options={{
-                headerTitle: 'My Shopping Lists',
+                headerTitle: 'Shopping Lists',
                 headerRight: () => (
-                    <TouchableOpacity onPress={() => handleOpenModal()} style={styles.headerButton}>
-                        <Text style={styles.headerButtonText}>New List</Text>
-                    </TouchableOpacity>
+                    <View style={styles.headerButtonsContainer}>
+                        <TouchableOpacity onPress={handleOpenTemplateSelectModal} style={styles.headerButton} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
+                           <Text style={styles.headerButtonText}>Template</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleOpenListModal()} style={styles.headerButton} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
+                            <Text style={styles.headerButtonText}>New</Text>
+                        </TouchableOpacity>
+                    </View>
                 ),
             }}
         />
 
       {shoppingLists.length === 0 ? (
         <View style={styles.centeredMessageContainer}>
-          <Text style={styles.emptyListText}>No shopping lists yet. Create one!</Text>
+          <Text style={styles.emptyListText}>No shopping lists yet. Create one or use a template!</Text>
         </View>
       ) : (
         <FlatList
@@ -186,15 +315,12 @@ const navigateToDetail = (list: ShoppingList) => {
         />
       )}
 
+      {/* Modale per Crea/Modifica Nome Lista */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => {
-          setModalVisible(!modalVisible);
-          setCurrentListName('');
-          setEditingList(null);
-        }}
+        visible={listModalVisible}
+        onRequestClose={() => setListModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -207,26 +333,50 @@ const navigateToDetail = (list: ShoppingList) => {
               autoFocus={true}
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setModalVisible(!modalVisible);
-                  setCurrentListName('');
-                  setEditingList(null);
-                }}
-              >
+              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setListModalVisible(false)}>
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSaveList}
-              >
+              <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveList} >
                 <Text style={styles.modalButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Modale per Selezionare Template */}
+       <Modal
+        animationType="slide"
+        transparent={false} // Usiamo un modale non trasparente per i template
+        visible={templateSelectModalVisible}
+        onRequestClose={() => setTemplateSelectModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalFullScreenContainer}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create List from Template</Text>
+                <TouchableOpacity onPress={() => setTemplateSelectModalVisible(false)} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+            </View>
+
+          {isLoadingTemplates ? (
+             <ActivityIndicator size="large" color="#007AFF" style={{marginTop: 20}}/>
+          ) : templates.length === 0 ? (
+            <View style={styles.centeredMessageContainer}>
+                 <Text style={styles.emptyListText}>No templates saved yet.</Text>
+                 <Text style={styles.emptyListSubText}>You can save any shopping list as a template using the '➕' icon.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={templates}
+              renderItem={renderTemplateItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.listContentContainer}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -236,10 +386,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  headerButtonsContainer: {
+      flexDirection: 'row',
+  },
   headerButton: {
-    marginRight: 15,
+    marginHorizontal: 8, // Spazio tra bottoni
     paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
   },
   headerButtonText: {
     color: Platform.OS === 'ios' ? '#007AFF' : '#333',
@@ -251,7 +404,8 @@ const styles = StyleSheet.create({
   },
   listItem: {
     backgroundColor: '#ffffff',
-    padding: 15,
+    paddingVertical: 12, // Ridotto leggermente
+    paddingHorizontal: 15,
     borderRadius: 10,
     marginBottom: 12,
     flexDirection: 'row',
@@ -265,6 +419,7 @@ const styles = StyleSheet.create({
   },
   listItemTextContainer: {
     flex: 1,
+    marginRight: 10, // Spazio prima delle azioni
   },
   listItemName: {
     fontSize: 18,
@@ -282,10 +437,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 8,
-    marginLeft: 10,
+    marginLeft: 8, // Spazio tra i pulsanti azione
   },
-  deleteAction: {
-  },
+  deleteAction: {},
   actionButtonText: {
     fontSize: Platform.OS === 'ios' ? 22 : 18,
   },
@@ -293,7 +447,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    padding: 20, // Aggiunto padding
   },
   loadingText: {
     fontSize: 18,
@@ -303,6 +457,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     textAlign: 'center',
+    marginBottom: 5, // Spazio sotto
+  },
+  emptyListSubText: { // Nuovo stile per sotto-testo lista vuota
+      fontSize: 14,
+      color: '#adb5bd',
+      textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -362,4 +522,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  modalFullScreenContainer: { // Stile per il modale di selezione template
+      flex: 1,
+      backgroundColor: '#f8f9fa',
+  },
+  modalHeader: { // Header per il modale full screen
+      padding: 15,
+      paddingTop: Platform.OS === 'ios' ? 50 : 20,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderBottomWidth: 1,
+      borderColor: '#dee2e6',
+      backgroundColor: '#ffffff',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  closeButtonText: {
+    fontSize: 17,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  templateItem: { // Stile per le voci nel modale template
+      backgroundColor: '#ffffff',
+      padding: 15,
+      borderBottomWidth: 1,
+      borderColor: '#e9ecef',
+  },
+  templateItemText: {
+      fontSize: 17,
+      color: '#343a40',
+  },
+  templateItemSubText: {
+      fontSize: 14,
+      color: '#6c757d',
+      marginTop: 4,
+  }
 });

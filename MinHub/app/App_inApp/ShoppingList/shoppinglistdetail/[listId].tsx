@@ -2,18 +2,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface ShoppingListItem {
@@ -25,6 +25,7 @@ interface ShoppingListItem {
   notes: string;
   isPurchased: boolean;
   createdAt: string;
+  price?: number; // Nuovo campo per il prezzo (opzionale)
 }
 
 interface ShoppingList {
@@ -36,6 +37,7 @@ interface ShoppingList {
 }
 
 const SHOPPING_LISTS_STORAGE_KEY = '@minhub_shoppingLists_v1';
+const CURRENCY_SYMBOL = '€'; // Simbolo valuta
 
 export default function ShoppingListDetailScreen() {
   const router = useRouter();
@@ -53,6 +55,7 @@ export default function ShoppingListDetailScreen() {
   const [itemUnit, setItemUnit] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [itemNotes, setItemNotes] = useState('');
+  const [itemPriceInput, setItemPriceInput] = useState(''); // State per l'input del prezzo (stringa)
 
   const loadListDetails = useCallback(async () => {
     if (!listId) {
@@ -72,6 +75,9 @@ export default function ShoppingListDetailScreen() {
           Alert.alert('Error', 'Shopping list not found.');
           router.back();
         }
+      } else {
+        Alert.alert('Error', 'No shopping lists found in storage.');
+        router.back();
       }
     } catch (error) {
       console.error('Failed to load list details.', error);
@@ -88,18 +94,22 @@ export default function ShoppingListDetailScreen() {
     }, [loadListDetails])
   );
 
-  const saveCurrentList = async (updatedList: ShoppingList) => {
+  const saveCurrentList = async (updatedList: ShoppingList | null) => {
+    if (!updatedList) return;
     try {
       const storedLists = await AsyncStorage.getItem(SHOPPING_LISTS_STORAGE_KEY);
       let allLists: ShoppingList[] = storedLists ? JSON.parse(storedLists) : [];
       const listIndex = allLists.findIndex(l => l.id === updatedList.id);
+      
+      const listWithTimestamp = { ...updatedList, updatedAt: new Date().toISOString() };
+
       if (listIndex > -1) {
-        allLists[listIndex] = { ...updatedList, updatedAt: new Date().toISOString() };
+        allLists[listIndex] = listWithTimestamp;
       } else {
-        allLists.push({ ...updatedList, updatedAt: new Date().toISOString() });
+        allLists.push(listWithTimestamp);
       }
       await AsyncStorage.setItem(SHOPPING_LISTS_STORAGE_KEY, JSON.stringify(allLists));
-      setCurrentList(updatedList); 
+      setCurrentList(listWithTimestamp);
     } catch (error) {
       console.error('Failed to save list.', error);
       Alert.alert('Error', 'Could not save changes to the list.');
@@ -114,6 +124,7 @@ export default function ShoppingListDetailScreen() {
       setItemUnit(item.unit);
       setItemCategory(item.category);
       setItemNotes(item.notes);
+      setItemPriceInput(item.price !== undefined ? item.price.toString() : '');
     } else {
       setEditingItem(null);
       setItemName('');
@@ -121,6 +132,7 @@ export default function ShoppingListDetailScreen() {
       setItemUnit('');
       setItemCategory('');
       setItemNotes('');
+      setItemPriceInput('');
     }
     setItemModalVisible(true);
   };
@@ -130,15 +142,20 @@ export default function ShoppingListDetailScreen() {
       Alert.alert('Required', 'Item name cannot be empty.');
       return;
     }
-    if (!currentList) return;
+    if (!currentList) {
+        Alert.alert('Error', 'Current list not loaded.');
+        return;
+    }
 
     let updatedItems;
     const now = new Date().toISOString();
+    const currentItemsArray = currentList.items || [];
+    const priceValue = parseFloat(itemPriceInput.replace(',', '.')); // Gestisce virgola e punto per decimali
 
     if (editingItem) {
-      updatedItems = currentList.items.map(item =>
+      updatedItems = currentItemsArray.map(item =>
         item.id === editingItem.id
-          ? { ...editingItem, name: itemName.trim(), quantity: itemQuantity.trim(), unit: itemUnit.trim(), category: itemCategory.trim(), notes: itemNotes.trim() }
+          ? { ...editingItem, name: itemName.trim(), quantity: itemQuantity.trim(), unit: itemUnit.trim(), category: itemCategory.trim(), notes: itemNotes.trim(), price: isNaN(priceValue) ? undefined : priceValue }
           : item
       );
     } else {
@@ -151,8 +168,9 @@ export default function ShoppingListDetailScreen() {
         notes: itemNotes.trim(),
         isPurchased: false,
         createdAt: now,
+        price: isNaN(priceValue) ? undefined : priceValue,
       };
-      updatedItems = [...currentList.items, newItem];
+      updatedItems = [...currentItemsArray, newItem];
     }
     saveCurrentList({ ...currentList, items: updatedItems });
     setItemModalVisible(false);
@@ -160,7 +178,7 @@ export default function ShoppingListDetailScreen() {
 
   const handleToggleItemPurchased = (itemId: string) => {
     if (!currentList) return;
-    const updatedItems = currentList.items.map(item =>
+    const updatedItems = (currentList.items || []).map(item =>
       item.id === itemId ? { ...item, isPurchased: !item.isPurchased } : item
     );
     saveCurrentList({ ...currentList, items: updatedItems });
@@ -174,12 +192,28 @@ export default function ShoppingListDetailScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          const updatedItems = currentList.items.filter(item => item.id !== itemId);
+          const updatedItems = (currentList.items || []).filter(item => item.id !== itemId);
           saveCurrentList({ ...currentList, items: updatedItems });
         },
       },
     ]);
   };
+
+  const { estimatedTotal, spentTotal } = useMemo(() => {
+    let estTotal = 0;
+    let spTotal = 0;
+    if (currentList?.items) {
+      currentList.items.forEach(item => {
+        const price = item.price !== undefined ? Number(item.price) : 0;
+        if (item.isPurchased) {
+          spTotal += price * (parseFloat(item.quantity) || 1);
+        } else {
+          estTotal += price * (parseFloat(item.quantity) || 1);
+        }
+      });
+    }
+    return { estimatedTotal: estTotal, spentTotal: spTotal };
+  }, [currentList?.items]);
 
   const groupedItems = useMemo(() => {
     if (!currentList?.items) return [];
@@ -194,7 +228,9 @@ export default function ShoppingListDetailScreen() {
 
     Object.keys(groups).forEach(category => {
         groups[category].sort((a, b) => {
-            if (a.isPurchased === b.isPurchased) return 0;
+            if (a.isPurchased === b.isPurchased) {
+                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            }
             return a.isPurchased ? 1 : -1;
         });
     });
@@ -210,10 +246,17 @@ export default function ShoppingListDetailScreen() {
         </View>
       </TouchableOpacity>
       <TouchableOpacity style={styles.itemDetailsArea} onPress={() => handleOpenItemModal(item)}>
-        <Text style={[styles.itemName, item.isPurchased && styles.itemNamePurchased]}>{item.name}</Text>
+        <View style={styles.itemNameRow}>
+            <Text style={[styles.itemName, item.isPurchased && styles.itemNamePurchased]}>{item.name}</Text>
+            {item.price !== undefined && (
+                <Text style={[styles.itemPrice, item.isPurchased && styles.itemNamePurchased]}>
+                    {CURRENCY_SYMBOL}{item.price.toFixed(2)}
+                </Text>
+            )}
+        </View>
         {(item.quantity || item.unit) && (
           <Text style={[styles.itemSubText, item.isPurchased && styles.itemNamePurchased]}>
-            {item.quantity} {item.unit}
+            Qty: {item.quantity}{item.unit ? ` ${item.unit}` : ''}
           </Text>
         )}
         {item.notes && <Text style={[styles.itemNotes, item.isPurchased && styles.itemNamePurchased]} numberOfLines={1}>{item.notes}</Text>}
@@ -225,13 +268,13 @@ export default function ShoppingListDetailScreen() {
   );
 
   const renderCategorySection = ({ item: [category, items] }: { item: [string, ShoppingListItem[]] }) => (
-    <View key={category}>
+    <View>
       <Text style={styles.categoryHeader}>{category}</Text>
       <FlatList
         data={items}
         renderItem={renderShoppingListItem}
         keyExtractor={item => item.id}
-        scrollEnabled={false} 
+        scrollEnabled={false}
       />
     </View>
   );
@@ -248,17 +291,22 @@ export default function ShoppingListDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: listName || currentList.name }} />
-      <FlatList
-        data={groupedItems}
-        renderItem={renderCategorySection}
-        keyExtractor={([category]) => category}
-        ListEmptyComponent={
-          <View style={styles.centeredMessageContainer}>
-            <Text style={styles.emptyListText}>This list is empty. Add some items!</Text>
+        <View style={styles.totalsContainer}>
+            <Text style={styles.totalText}>Estimated: {CURRENCY_SYMBOL}{estimatedTotal.toFixed(2)}</Text>
+            <Text style={styles.totalText}>Spent: {CURRENCY_SYMBOL}{spentTotal.toFixed(2)}</Text>
+        </View>
+      {groupedItems.length === 0 ? (
+         <View style={styles.centeredMessageContainerContent}>
+            <Text style={styles.emptyListText}>This list is empty. Tap '+' to add items!</Text>
           </View>
-        }
-        contentContainerStyle={styles.listContentContainer}
-      />
+      ) : (
+        <FlatList
+            data={groupedItems}
+            renderItem={renderCategorySection}
+            keyExtractor={([category]) => category}
+            contentContainerStyle={styles.listContentContainer}
+        />
+      )}
       <TouchableOpacity style={styles.addItemButton} onPress={() => handleOpenItemModal()}>
         <Text style={styles.addItemButtonText}>+</Text>
       </TouchableOpacity>
@@ -272,17 +320,19 @@ export default function ShoppingListDetailScreen() {
         <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalOverlay}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
         >
-            <ScrollView contentContainerStyle={styles.modalScrollContainer}>
+            <ScrollView contentContainerStyle={styles.modalScrollContainer} keyboardShouldPersistTaps="handled">
                 <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>{editingItem ? 'Edit Item' : 'Add New Item'}</Text>
                 <TextInput style={styles.modalInput} placeholder="Item Name (e.g., Milk)" value={itemName} onChangeText={setItemName} autoFocus={true}/>
                 <View style={styles.rowInputContainer}>
-                    <TextInput style={[styles.modalInput, styles.rowInputHalf]} placeholder="Quantity (e.g., 1, 200)" value={itemQuantity} onChangeText={setItemQuantity} keyboardType="numeric"/>
-                    <TextInput style={[styles.modalInput, styles.rowInputHalf]} placeholder="Unit (e.g., L, g, pcs)" value={itemUnit} onChangeText={setItemUnit}/>
+                    <TextInput style={[styles.modalInput, styles.rowInputHalf, {marginRight: 5}]} placeholder="Quantity (e.g., 1)" value={itemQuantity} onChangeText={setItemQuantity} />
+                    <TextInput style={[styles.modalInput, styles.rowInputHalf, {marginLeft: 5}]} placeholder="Unit (e.g., L, pcs)" value={itemUnit} onChangeText={setItemUnit}/>
                 </View>
-                <TextInput style={styles.modalInput} placeholder="Category (e.g., Dairy, Produce)" value={itemCategory} onChangeText={setItemCategory}/>
-                <TextInput style={[styles.modalInput, styles.notesInput]} placeholder="Notes (e.g., organic, specific brand)" value={itemNotes} onChangeText={setItemNotes} multiline/>
+                <TextInput style={styles.modalInput} placeholder="Category (e.g., Dairy)" value={itemCategory} onChangeText={setItemCategory}/>
+                <TextInput style={styles.modalInput} placeholder={`Price (${CURRENCY_SYMBOL}) (e.g., 1.99)`} value={itemPriceInput} onChangeText={setItemPriceInput} keyboardType="numeric"/>
+                <TextInput style={[styles.modalInput, styles.notesInput]} placeholder="Notes (e.g., organic)" value={itemNotes} onChangeText={setItemNotes} multiline/>
                 <View style={styles.modalActions}>
                     <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setItemModalVisible(false)}>
                     <Text style={styles.modalButtonText}>Cancel</Text>
@@ -304,14 +354,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  totalsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    backgroundColor: '#e9ecef',
+    borderBottomWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  totalText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+  },
   listContentContainer: {
-    paddingBottom: 100, 
+    paddingBottom: 100,
   },
   centeredMessageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  centeredMessageContainerContent: { // Per quando la lista è vuota ma i totali sono visibili
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 20, // Aggiunto per dare spazio ai totali
   },
   loadingText: {
     fontSize: 18,
@@ -321,7 +392,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     textAlign: 'center',
-    marginTop: 50,
   },
   addItemButton: {
     position: 'absolute',
@@ -351,10 +421,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 20,
     paddingBottom: 10,
-    backgroundColor: '#e9ecef',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#dee2e6',
+    backgroundColor: '#f8f9fa', // Cambiato per coerenza
   },
   itemContainer: {
     flexDirection: 'row',
@@ -389,10 +456,22 @@ const styles = StyleSheet.create({
   itemDetailsArea: {
     flex: 1,
   },
+  itemNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   itemName: {
     fontSize: 17,
     color: '#343a40',
     fontWeight: '500',
+    flexShrink: 1, // Permette al nome di accorciarsi se il prezzo è lungo
+  },
+  itemPrice: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#28a745', // Verde per il prezzo
+    marginLeft: 10,
   },
   itemNamePurchased: {
     textDecorationLine: 'line-through',
@@ -401,11 +480,13 @@ const styles = StyleSheet.create({
   itemSubText: {
     fontSize: 14,
     color: '#6c757d',
+    marginTop: 2,
   },
   itemNotes: {
     fontSize: 13,
     color: '#868e96',
     fontStyle: 'italic',
+    marginTop: 2,
   },
   deleteItemButton: {
     padding: 8,
@@ -451,7 +532,7 @@ const styles = StyleSheet.create({
     borderColor: '#ced4da',
     borderRadius: 8,
     paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
     fontSize: 16,
     marginBottom: 15,
     backgroundColor: '#f8f9fa',
