@@ -25,6 +25,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/Calendar/calendar" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Calendar</Text>
+          </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/Clock/clock" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Clock</Text>
