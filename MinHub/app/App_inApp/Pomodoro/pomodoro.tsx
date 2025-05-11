@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+
+const RADIUS = 100;
+const STROKE_WIDTH = 10;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export default function Pomodoro() {
   const [minutes, setMinutes] = useState(25);
@@ -7,6 +12,14 @@ export default function Pomodoro() {
   const [isRunning, setIsRunning] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
   const [cycles, setCycles] = useState(0);
+  const [studyDuration, setStudyDuration] = useState(25);
+  const [shortBreakDuration, setShortBreakDuration] = useState(5);
+  const [longBreakDuration, setLongBreakDuration] = useState(15);
+
+  const totalSeconds = (isBreak ? (cycles === 3 ? longBreakDuration : shortBreakDuration) : studyDuration) * 60;
+  const currentSeconds = minutes * 60 + seconds;
+  const progress = currentSeconds / totalSeconds;
+  const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
 
   useEffect(() => {
     let interval: number | null = null;
@@ -18,15 +31,15 @@ export default function Pomodoro() {
             if (isBreak) {
               setCycles(prev => prev + 1);
               if (cycles === 3) {
-                setMinutes(15); // Long break after 4 sessions
+                setMinutes(longBreakDuration);
                 setCycles(0);
               } else {
-                setMinutes(5); // Short break
+                setMinutes(shortBreakDuration);
               }
             } else {
-              setMinutes(isBreak ? 5 : 25); // Reset work session to 25 min
+              setMinutes(studyDuration);
             }
-            setIsBreak(!isBreak); // Switch between work and break
+            setIsBreak(!isBreak);
             setSeconds(0);
           } else {
             setMinutes(prev => prev - 1);
@@ -43,7 +56,7 @@ export default function Pomodoro() {
     return () => {
       if (interval !== null) clearInterval(interval);
     };
-  }, [isRunning, minutes, seconds, isBreak, cycles]);
+  }, [isRunning, minutes, seconds, isBreak, cycles, studyDuration, shortBreakDuration, longBreakDuration]);
 
   const handleStartStop = () => {
     setIsRunning(!isRunning);
@@ -51,7 +64,7 @@ export default function Pomodoro() {
 
   const handleReset = () => {
     setIsRunning(false);
-    setMinutes(25);
+    setMinutes(studyDuration);
     setSeconds(0);
     setIsBreak(false);
     setCycles(0);
@@ -64,9 +77,63 @@ export default function Pomodoro() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{isBreak ? 'Break Time' : 'Work Time'}</Text>
-      <Text style={styles.timer}>
-        {formatTime(minutes)}:{formatTime(seconds)}
-      </Text>
+
+      <View style={styles.timerContainer}>
+        <Svg width={2 * (RADIUS + STROKE_WIDTH)} height={2 * (RADIUS + STROKE_WIDTH)}>
+          <Circle
+            stroke="#ecf0f1"
+            fill="none"
+            cx={RADIUS + STROKE_WIDTH}
+            cy={RADIUS + STROKE_WIDTH}
+            r={RADIUS}
+            strokeWidth={STROKE_WIDTH}
+          />
+          <Circle
+            stroke="#e74c3c"
+            fill="none"
+            cx={RADIUS + STROKE_WIDTH}
+            cy={RADIUS + STROKE_WIDTH}
+            r={RADIUS}
+            strokeWidth={STROKE_WIDTH}
+            strokeDasharray={`${CIRCUMFERENCE}, ${CIRCUMFERENCE}`}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            rotation="-90"
+            originX={RADIUS + STROKE_WIDTH}
+            originY={RADIUS + STROKE_WIDTH}
+          />
+        </Svg>
+        <Text style={styles.timer}>
+          {formatTime(minutes)}:{formatTime(seconds)}
+        </Text>
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Text>Study Duration (min):</Text>
+        <TextInput
+          style={styles.input}
+          keyboardType="numeric"
+          value={String(studyDuration)}
+          onChangeText={(text) => setStudyDuration(parseInt(text) || 0)}
+        />
+
+        <Text>Short Break (min):</Text>
+        <TextInput
+          style={styles.input}
+          keyboardType="numeric"
+          value={String(shortBreakDuration)}
+          onChangeText={(text) => setShortBreakDuration(parseInt(text) || 0)}
+        />
+
+        <Text>Long Break (min):</Text>
+        <TextInput
+          style={styles.input}
+          keyboardType="numeric"
+          value={String(longBreakDuration)}
+          onChangeText={(text) => setLongBreakDuration(parseInt(text) || 0)}
+        />
+      </View>
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.button, isRunning ? styles.stopButton : styles.startButton]}
@@ -78,6 +145,7 @@ export default function Pomodoro() {
           <Text style={styles.buttonText}>Reset</Text>
         </TouchableOpacity>
       </View>
+
       <Text style={styles.cycleInfo}>Cycles: {cycles}</Text>
     </View>
   );
@@ -97,11 +165,32 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginBottom: 20,
   },
-  timer: {
-    fontSize: 80,
-    fontWeight: 'bold',
-    color: '#e74c3c',
+  timerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
     marginBottom: 30,
+  },
+  timer: {
+    position: 'absolute',
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 30,
+    alignItems: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 5,
+    width: 100,
+    textAlign: 'center',
+    backgroundColor: '#fff',
   },
   buttonContainer: {
     flexDirection: 'row',
