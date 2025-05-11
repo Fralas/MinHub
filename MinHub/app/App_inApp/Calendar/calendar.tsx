@@ -19,17 +19,16 @@ import {
 } from 'react-native';
 import { Agenda, AgendaEntry, AgendaSchedule, Calendar, DateData } from 'react-native-calendars';
 
-// --- Interfaces ---
 interface CalendarEvent {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD
-  startTime?: string; // HH:MM
-  endTime?: string; // HH:MM
+  date: string;
+  startTime?: string;
+  endTime?: string;
   notes?: string;
   color?: string;
-  reminderOffset?: number | null; // Minutes before event, null for no reminder
-  notificationId?: string | null; // To cancel/update scheduled notification
+  reminderOffset?: number | null;
+  notificationId?: string | null;
 }
 
 interface MyAgendaItem extends AgendaEntry {
@@ -42,7 +41,6 @@ interface MyAgendaItem extends AgendaEntry {
   notificationId?: string | null;
 }
 
-// --- Constants ---
 const CALENDAR_EVENTS_STORAGE_KEY = '@minhub_calendarEvents_v1';
 const PREDEFINED_EVENT_COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#AF52DE', '#5856D6'];
 const REMINDER_OPTIONS = [
@@ -54,16 +52,15 @@ const REMINDER_OPTIONS = [
     { label: '1 day before', value: 24 * 60 },
 ];
 
-// --- Notification Handler (App Global or in Root Layout) ---
-// This should ideally be configured once, e.g., in your _layout.tsx or root component
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
-
 
 export default function CalendarScreen() {
   const today = new Date().toISOString().split('T')[0];
@@ -84,13 +81,11 @@ export default function CalendarScreen() {
   const [viewMode, setViewMode] = useState<'calendar' | 'agenda'>('calendar');
   const [agendaItems, setAgendaItems] = useState<AgendaSchedule>({});
 
-  // --- Notification Permissions ---
   const requestNotificationPermissions = async () => {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Denied', 'Notification permissions are required to set event reminders.');
     }
-    // For Android, ensure channel is set up if needed (usually done automatically or can be customized)
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
             name: 'default',
@@ -104,7 +99,6 @@ export default function CalendarScreen() {
   useEffect(() => {
     requestNotificationPermissions();
   }, []);
-
 
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
@@ -136,7 +130,6 @@ export default function CalendarScreen() {
     }
   };
 
-  // --- Notification Scheduling Logic ---
   const scheduleEventNotification = async (event: CalendarEvent): Promise<string | null> => {
     if (event.reminderOffset == null || !event.startTime) {
       if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
@@ -144,34 +137,59 @@ export default function CalendarScreen() {
     }
 
     const [hours, minutes] = event.startTime.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) return null; // Invalid time format
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        console.log('Invalid time format for event:', event.title, event.startTime);
+        if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
+        return null;
+    }
 
-    const eventDate = new Date(event.date + 'T00:00:00'); // Ensure local timezone interpretation
-    eventDate.setHours(hours, minutes, 0, 0);
+    const eventDateParts = event.date.split('-').map(Number);
+    if (eventDateParts.length !== 3 || eventDateParts.some(isNaN) || 
+        eventDateParts[1] < 1 || eventDateParts[1] > 12 || eventDateParts[2] < 1 || eventDateParts[2] > 31) {
+        console.log('Invalid date format for event:', event.title, event.date);
+        if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
+        return null;
+    }
+    
+    const eventDateTime = new Date(eventDateParts[0], eventDateParts[1] - 1, eventDateParts[2], hours, minutes, 0);
 
-    const triggerDate = new Date(eventDate.getTime() - event.reminderOffset * 60000);
+    if (isNaN(eventDateTime.getTime())) {
+        console.log('Invalid constructed date for event:', event.title);
+        if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
+        return null;
+    }
 
-    if (triggerDate.getTime() <= Date.now()) {
+    const triggerDateTime = new Date(eventDateTime.getTime() - event.reminderOffset * 60000);
+
+    if (triggerDateTime.getTime() <= Date.now()) {
       console.log('Reminder time is in the past, not scheduling for event:', event.title);
       if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
-      return null; // Don't schedule past reminders
+      return null;
     }
 
     try {
-      // Cancel previous notification if it exists
       if (event.notificationId) {
         await Notifications.cancelScheduledNotificationAsync(event.notificationId);
       }
 
+      const triggerInput: Notifications.NotificationTriggerInput = {
+        year: triggerDateTime.getFullYear(),
+        month: triggerDateTime.getMonth() + 1,
+        day: triggerDateTime.getDate(),
+        hour: triggerDateTime.getHours(),
+        minute: triggerDateTime.getMinutes(),
+        repeats: false,
+      };
+
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: "Event Reminder",
-          body: `${event.title} at ${event.startTime}`,
-          data: { eventId: event.id },
+          body: `${event.title}${event.startTime ? ` at ${event.startTime}` : ''}`,
+          data: { eventId: event.id, url: `/calendar?date=${event.date}` },
         },
-        trigger: triggerDate,
+        trigger: triggerInput,
       });
-      console.log(`Notification scheduled for ${event.title}: ${notificationId} at ${triggerDate}`);
+      console.log(`Notification scheduled for ${event.title}: ${notificationId} at ${triggerDateTime}`);
       return notificationId;
     } catch (e) {
       console.error("Error scheduling notification:", e);
@@ -179,7 +197,6 @@ export default function CalendarScreen() {
       return null;
     }
   };
-
 
   const handleDayPress = (day: DateData) => {
     setSelectedDate(day.dateString);
@@ -202,7 +219,7 @@ export default function CalendarScreen() {
       setEventEndTime('');
       setEventNotes('');
       setEventColor(PREDEFINED_EVENT_COLORS[0]);
-      setEventReminderOffset(15); // Default reminder 15 mins
+      setEventReminderOffset(15);
     }
     setSelectedDate(targetDate);
     setModalVisible(true);
@@ -224,7 +241,7 @@ export default function CalendarScreen() {
         notes: eventNotes.trim() || undefined,
         color: eventColor,
         reminderOffset: eventReminderOffset,
-        notificationId: currentNotificationId, // Will be updated by scheduleEventNotification
+        notificationId: currentNotificationId,
     };
 
     let finalEvent: CalendarEvent;
@@ -239,9 +256,8 @@ export default function CalendarScreen() {
     }
     
     const newNotificationId = await scheduleEventNotification(finalEvent);
-    finalEvent.notificationId = newNotificationId; // Update with new ID
+    finalEvent.notificationId = newNotificationId;
 
-    // Update the event in the list with the new notification ID
     updatedEvents = updatedEvents.map(ev => ev.id === finalEvent.id ? finalEvent : ev);
 
     await saveEvents(updatedEvents);
@@ -299,7 +315,6 @@ export default function CalendarScreen() {
       });
   }, [events, selectedDate]);
 
-
   const loadItemsForAgenda = useCallback((day: DateData) => {
     const newAgendaItemsState: AgendaSchedule = { ...agendaItems };
     for (let i = -15; i < 15; i++) {
@@ -313,7 +328,7 @@ export default function CalendarScreen() {
       if (!newAgendaItemsState[event.date]) {
         newAgendaItemsState[event.date] = [];
       }
-      if (!newAgendaItemsState[event.date].find((i: MyAgendaItem) => i.id === event.id)) {
+      if (!newAgendaItemsState[event.date].find((entry: AgendaEntry) => (entry as MyAgendaItem).id === event.id)) {
         newAgendaItemsState[event.date].push({
           id: event.id,
           name: event.title,
@@ -349,7 +364,6 @@ export default function CalendarScreen() {
       loadItemsForAgenda({ dateString: selectedDate, day: 0, month: 0, year: 0, timestamp: new Date(selectedDate).getTime()});
     }
   }, [events, viewMode, selectedDate, loadItemsForAgenda]);
-
 
    const renderAgendaItem = (reservation: AgendaEntry | undefined, isFirst: boolean) => {
      if(!reservation) return null;
@@ -388,7 +402,6 @@ export default function CalendarScreen() {
        </View>
      );
    };
-
 
    const renderCalendarEventItem = ({ item }: { item: CalendarEvent }) => (
      <TouchableOpacity onPress={() => handleOpenModal(item)}>
@@ -450,7 +463,7 @@ export default function CalendarScreen() {
                     selectedDayBackgroundColor: '#007AFF',
                     selectedDayTextColor: '#ffffff',
                 }}
-                key={`calendar-${selectedDate}-${events.length}`} // Forcing re-render on event changes
+                key={`calendar-${selectedDate}-${events.length}`}
             />
             <View style={styles.eventListContainer}>
                 <Text style={styles.eventListHeader}>
@@ -474,7 +487,11 @@ export default function CalendarScreen() {
             selected={today}
             renderItem={renderAgendaItem}
             renderEmptyDate={renderEmptyAgendaDate}
-            rowHasChanged={(r1: MyAgendaItem, r2: MyAgendaItem) => r1.id !== r2.id || r1.name !== r2.name || r1.startTime !== r2.startTime }
+            rowHasChanged={(a: AgendaEntry, b: AgendaEntry) => {
+                const r1 = a as MyAgendaItem;
+                const r2 = b as MyAgendaItem;
+                return r1.id !== r2.id || r1.name !== r2.name || r1.startTime !== r2.startTime || r1.notes !== r2.notes || r1.color !== r2.color;
+              }}
             showClosingKnob={true}
             theme={{
                 agendaKnobColor: '#007AFF',
@@ -681,13 +698,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#495057',
     marginBottom: 8,
-    marginTop: 5, // Spazio sopra
+    marginTop: 5,
     fontWeight: '500',
   },
   colorPickerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 15, // Spazio sotto
+    marginBottom: 15,
   },
   colorButton: {
     width: 30,
