@@ -19,6 +19,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/Calculator/calculator" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Calculator</Text>
+          </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/ShoppingList/shoppinglist" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Shopping Lists</Text>
