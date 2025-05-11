@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications';
 import { Stack, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,13 +22,24 @@ import {
 interface Reminder {
   id: string;
   title: string;
-  date: string; 
-  time: string; 
+  date: string;
+  time: string;
   notes?: string;
   isCompleted: boolean;
+  notificationId?: string | null;
 }
 
 const REMINDERS_STORAGE_KEY = '@minhub_reminders_v1';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function RemindersScreen() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -36,20 +49,64 @@ export default function RemindersScreen() {
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
 
   const [currentTitle, setCurrentTitle] = useState('');
-  const [currentDate, setCurrentDate] = useState(''); 
-  const [currentTime, setCurrentTime] = useState(''); 
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
   const [currentNotes, setCurrentNotes] = useState('');
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const [currentFilter, setCurrentFilter] = useState<'all' | 'pending' | 'completed' | 'today'>('pending');
+
+  const getTodayDateString = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const formatTime = (date: Date): string => {
+    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+
+  const requestNotificationPermissions = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus !== 'granted') {
+        Alert.alert('Permission Denied', 'Notification permissions are needed for reminders to work.');
+      }
+    }
+    if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+        });
+    }
+  };
+
+  useEffect(() => {
+    requestNotificationPermissions();
+  }, []);
+
+  const sortReminders = (remindersToSort: Reminder[]): Reminder[] => {
+    return [...remindersToSort].sort((a, b) => {
+      const dateTimeA = new Date(`${a.date}T${a.time || '00:00'}`).getTime();
+      const dateTimeB = new Date(`${b.date}T${b.time || '00:00'}`).getTime();
+      if (a.isCompleted && !b.isCompleted) return 1;
+      if (!a.isCompleted && b.isCompleted) return -1;
+      return dateTimeA - dateTimeB;
+    });
+  };
 
   const loadReminders = useCallback(async () => {
     setIsLoading(true);
     try {
       const storedReminders = await AsyncStorage.getItem(REMINDERS_STORAGE_KEY);
       const parsedReminders: Reminder[] = storedReminders ? JSON.parse(storedReminders) : [];
-      setReminders(parsedReminders.sort((a, b) => {
-        const dateTimeA = new Date(`${a.date}T${a.time || '00:00'}`).getTime();
-        const dateTimeB = new Date(`${b.date}T${b.time || '00:00'}`).getTime();
-        return dateTimeA - dateTimeB;
-      }));
+      setReminders(sortReminders(parsedReminders));
     } catch (error) {
       console.error('Failed to load reminders.', error);
       Alert.alert('Error', 'Could not load reminders.');
@@ -66,79 +123,149 @@ export default function RemindersScreen() {
 
   const saveReminders = async (updatedReminders: Reminder[]) => {
     try {
-      const sortedReminders = updatedReminders.sort((a, b) => {
-        const dateTimeA = new Date(`${a.date}T${a.time || '00:00'}`).getTime();
-        const dateTimeB = new Date(`${b.date}T${b.time || '00:00'}`).getTime();
-        return dateTimeA - dateTimeB;
-      });
-      await AsyncStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(sortedReminders));
-      setReminders(sortedReminders);
+      const sorted = sortReminders(updatedReminders);
+      await AsyncStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(sorted));
+      setReminders(sorted);
     } catch (error) {
       console.error('Failed to save reminders.', error);
       Alert.alert('Error', 'Could not save reminders.');
     }
   };
 
+  const scheduleReminderNotification = async (reminder: Reminder): Promise<string | null> => {
+    if (reminder.isCompleted || !reminder.date || !reminder.time) {
+      if (reminder.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(reminder.notificationId);
+      }
+      return null;
+    }
+    const [hours, minutes] = reminder.time.split(':').map(Number);
+    const dateParts = reminder.date.split('-').map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59 ||
+        dateParts.length !== 3 || dateParts.some(isNaN) ||
+        dateParts[1] < 1 || dateParts[1] > 12 || dateParts[2] < 1 || dateParts[2] > 31) {
+      if (reminder.notificationId) await Notifications.cancelScheduledNotificationAsync(reminder.notificationId);
+      return null;
+    }
+    const reminderDateTime = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], hours, minutes, 0);
+    if (isNaN(reminderDateTime.getTime())) {
+        if (reminder.notificationId) await Notifications.cancelScheduledNotificationAsync(reminder.notificationId);
+        return null;
+    }
+    const now = Date.now();
+    const secondsUntilTrigger = (reminderDateTime.getTime() - now) / 1000;
+    if (secondsUntilTrigger <= 0) {
+      if (reminder.notificationId) await Notifications.cancelScheduledNotificationAsync(reminder.notificationId);
+      return null;
+    }
+    try {
+      if (reminder.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(reminder.notificationId);
+      }
+      const calculatedSeconds = Math.max(1, Math.round(secondsUntilTrigger));
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'MinHub Reminder',
+          body: reminder.title,
+          data: { reminderId: reminder.id, url: `/reminders` },
+        },
+        trigger: calculatedSeconds as any,
+      });
+      return notificationId;
+    } catch (e) {
+      console.error("Error scheduling reminder notification:", e);
+      Alert.alert("Reminder Error", "Could not schedule the reminder.");
+      return null;
+    }
+  };
+
+  const cancelReminderNotification = async (notificationId?: string | null) => {
+    if (notificationId) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
+      } catch (e) {
+        console.error("Error cancelling notification:", e);
+      }
+    }
+  };
+
   const handleOpenModal = (reminder?: Reminder) => {
+    const now = new Date();
     if (reminder) {
       setEditingReminder(reminder);
       setCurrentTitle(reminder.title);
-      setCurrentDate(reminder.date);
-      setCurrentTime(reminder.time);
+      const [year, month, day] = reminder.date.split('-').map(Number);
+      const [hours, minutes] = reminder.time.split(':').map(Number);
+      setCurrentDateTime(new Date(year, month - 1, day, hours, minutes));
       setCurrentNotes(reminder.notes || '');
     } else {
       setEditingReminder(null);
       setCurrentTitle('');
-      setCurrentDate(new Date().toISOString().split('T')[0]); 
-      setCurrentTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })); 
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      tomorrow.setHours(now.getHours(), now.getMinutes()); // Mantieni l'ora corrente per domani
+      setCurrentDateTime(tomorrow);
       setCurrentNotes('');
     }
     setModalVisible(true);
   };
 
-  const handleSaveReminder = () => {
+  const handleSaveReminder = async () => {
     if (currentTitle.trim() === '') {
       Alert.alert('Required', 'Reminder title cannot be empty.');
       return;
     }
-    if (currentDate.trim() === '' || !/^\d{4}-\d{2}-\d{2}$/.test(currentDate.trim())) {
-        Alert.alert('Invalid Date', 'Please enter a valid date in YYYY-MM-DD format.');
-        return;
-    }
-    if (currentTime.trim() === '' || !/^\d{2}:\d{2}$/.test(currentTime.trim())) {
-        Alert.alert('Invalid Time', 'Please enter a valid time in HH:MM format.');
-        return;
-    }
+
+    const reminderDateStr = formatDate(currentDateTime);
+    const reminderTimeStr = formatTime(currentDateTime);
 
     let updatedReminders;
+    let reminderToProcess: Reminder;
+
     if (editingReminder) {
-      updatedReminders = reminders.map(r =>
-        r.id === editingReminder.id
-          ? { ...editingReminder, title: currentTitle.trim(), date: currentDate.trim(), time: currentTime.trim(), notes: currentNotes.trim() }
-          : r
-      );
+      reminderToProcess = {
+        ...editingReminder,
+        title: currentTitle.trim(),
+        date: reminderDateStr,
+        time: reminderTimeStr,
+        notes: currentNotes.trim() || undefined,
+      };
     } else {
-      const newReminder: Reminder = {
+      reminderToProcess = {
         id: Date.now().toString(),
         title: currentTitle.trim(),
-        date: currentDate.trim(),
-        time: currentTime.trim(),
+        date: reminderDateStr,
+        time: reminderTimeStr,
         notes: currentNotes.trim() || undefined,
         isCompleted: false,
+        notificationId: null,
       };
-      updatedReminders = [...reminders, newReminder];
     }
+    
+    const newNotificationId = await scheduleReminderNotification(reminderToProcess);
+    reminderToProcess.notificationId = newNotificationId;
+    
+    if (editingReminder) {
+        updatedReminders = reminders.map(r => (r.id === editingReminder.id ? reminderToProcess : r));
+    } else {
+        updatedReminders = [...reminders, reminderToProcess];
+    }
+
     saveReminders(updatedReminders);
     setModalVisible(false);
   };
 
-  const handleDeleteReminder = (reminderId: string) => {
+  const handleDeleteReminder = async (reminderId: string) => {
     Alert.alert('Delete Reminder', 'Are you sure you want to delete this reminder?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          const reminderToDelete = reminders.find(r => r.id === reminderId);
+          if (reminderToDelete) {
+            await cancelReminderNotification(reminderToDelete.notificationId);
+          }
           const updatedReminders = reminders.filter(r => r.id !== reminderId);
           saveReminders(updatedReminders);
         },
@@ -146,12 +273,74 @@ export default function RemindersScreen() {
     ]);
   };
 
-  const handleToggleComplete = (reminderId: string) => {
-    const updatedReminders = reminders.map(r =>
-      r.id === reminderId ? { ...r, isCompleted: !r.isCompleted } : r
-    );
-    saveReminders(updatedReminders);
+  const handleToggleComplete = async (reminderId: string) => {
+    let reminderToUpdate: Reminder | undefined;
+    const tempUpdatedReminders = reminders.map(r => {
+      if (r.id === reminderId) {
+        reminderToUpdate = { ...r, isCompleted: !r.isCompleted };
+        return reminderToUpdate;
+      }
+      return r;
+    });
+
+    if (reminderToUpdate) {
+      if (reminderToUpdate.isCompleted && reminderToUpdate.notificationId) {
+        await cancelReminderNotification(reminderToUpdate.notificationId);
+        reminderToUpdate.notificationId = null;
+      } else if (!reminderToUpdate.isCompleted) {
+        const newNotificationId = await scheduleReminderNotification(reminderToUpdate);
+        reminderToUpdate.notificationId = newNotificationId;
+      }
+      const finalUpdatedReminders = tempUpdatedReminders.map(r => r.id === reminderToUpdate!.id ? reminderToUpdate! : r);
+      saveReminders(finalUpdatedReminders);
+    }
   };
+
+  const onChangeDatePicker = (event: DateTimePickerEvent, selectedDateValue?: Date) => {
+    setShowDatePicker(false); // Nascondi sempre su Android dopo selezione/dismiss
+    if (event.type === 'set' && selectedDateValue) {
+      const newDateTime = new Date(currentDateTime);
+      newDateTime.setFullYear(selectedDateValue.getFullYear());
+      newDateTime.setMonth(selectedDateValue.getMonth());
+      newDateTime.setDate(selectedDateValue.getDate());
+      setCurrentDateTime(newDateTime);
+    }
+  };
+
+  const onChangeTimePicker = (event: DateTimePickerEvent, selectedTimeValue?: Date) => {
+    setShowTimePicker(false); // Nascondi sempre su Android dopo selezione/dismiss
+    if (event.type === 'set' && selectedTimeValue) {
+      const newDateTime = new Date(currentDateTime);
+      newDateTime.setHours(selectedTimeValue.getHours());
+      newDateTime.setMinutes(selectedTimeValue.getMinutes());
+      setCurrentDateTime(newDateTime);
+    }
+  };
+
+
+  const filteredReminders = useMemo(() => {
+    const todayStr = getTodayDateString();
+    switch (currentFilter) {
+      case 'pending':
+        return reminders.filter(r => !r.isCompleted);
+      case 'completed':
+        return reminders.filter(r => r.isCompleted);
+      case 'today':
+        return reminders.filter(r => r.date === todayStr && !r.isCompleted);
+      case 'all':
+      default:
+        return reminders;
+    }
+  }, [reminders, currentFilter]);
+
+  const renderFilterButton = (filter: FilterOption, label: string) => (
+    <TouchableOpacity
+      style={[styles.filterButton, currentFilter === filter && styles.filterButtonActive]}
+      onPress={() => setCurrentFilter(filter)}
+    >
+      <Text style={[styles.filterButtonText, currentFilter === filter && styles.filterButtonTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   const renderReminderItem = ({ item }: { item: Reminder }) => (
     <View style={[styles.reminderItem, item.isCompleted && styles.reminderItemCompleted]}>
@@ -163,7 +352,7 @@ export default function RemindersScreen() {
         <TouchableOpacity style={styles.reminderContent} onPress={() => handleOpenModal(item)}>
             <Text style={[styles.reminderTitle, item.isCompleted && styles.reminderTextCompleted]}>{item.title}</Text>
             <Text style={[styles.reminderDateTime, item.isCompleted && styles.reminderTextCompleted]}>
-            {new Date(item.date + 'T' + item.time).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} - {item.time}
+            {new Date(item.date + 'T' + (item.time || '00:00')).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} - {item.time}
             </Text>
             {item.notes && <Text style={[styles.reminderNotes, item.isCompleted && styles.reminderTextCompleted]} numberOfLines={1}>{item.notes}</Text>}
         </TouchableOpacity>
@@ -194,13 +383,25 @@ export default function RemindersScreen() {
           ),
         }}
       />
-      {reminders.length === 0 ? (
-        <View style={styles.centeredMessageContainer}>
-          <Text style={styles.emptyListText}>No reminders yet. Tap 'Add' to create one!</Text>
+      <View style={styles.filterContainer}>
+        {renderFilterButton('pending', 'Pending')}
+        {renderFilterButton('today', "Today's")}
+        {renderFilterButton('completed', 'Completed')}
+        {renderFilterButton('all', 'All')}
+      </View>
+
+      {filteredReminders.length === 0 ? (
+        <View style={styles.centeredMessageContainerContent}>
+          <Text style={styles.emptyListText}>
+            {currentFilter === 'pending' ? 'No pending reminders.' :
+             currentFilter === 'today' ? 'No reminders for today.' :
+             currentFilter === 'completed' ? 'No completed reminders yet.' :
+             'No reminders yet. Tap "Add" to create one!'}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={reminders}
+          data={filteredReminders}
           renderItem={renderReminderItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContentContainer}
@@ -228,20 +429,32 @@ export default function RemindersScreen() {
                 onChangeText={setCurrentTitle}
                 autoFocus={true}
               />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Date (YYYY-MM-DD)"
-                value={currentDate}
-                onChangeText={setCurrentDate}
-                maxLength={10}
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Time (HH:MM - 24h format)"
-                value={currentTime}
-                onChangeText={setCurrentTime}
-                maxLength={5}
-              />
+              
+              <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.pickerButton}>
+                <Text style={styles.pickerButtonText}>Date: {formatDate(currentDateTime)}</Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={currentDateTime}
+                  mode="date"
+                  display="default"
+                  onChange={onChangeDatePicker}
+                />
+              )}
+
+              <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.pickerButton}>
+                <Text style={styles.pickerButtonText}>Time: {formatTime(currentDateTime)}</Text>
+              </TouchableOpacity>
+              {showTimePicker && (
+                <DateTimePicker
+                  value={currentDateTime}
+                  mode="time"
+                  display="default"
+                  is24Hour={true}
+                  onChange={onChangeTimePicker}
+                />
+              )}
+
               <TextInput
                 style={[styles.modalInput, styles.notesInput]}
                 placeholder="Optional Notes"
@@ -287,11 +500,46 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#e9ecef',
+    borderBottomWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  filterButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  filterButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
   centeredMessageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  centeredMessageContainerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 20,
   },
   loadingText: {
     fontSize: 16,
@@ -321,6 +569,7 @@ const styles = StyleSheet.create({
   },
   reminderItemCompleted: {
     backgroundColor: '#e9ecef',
+    opacity: 0.7,
   },
   checkboxArea: {
     padding: 8,
@@ -411,6 +660,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 15,
     backgroundColor: '#f8f9fa',
+  },
+  pickerButton: {
+    borderWidth: 1,
+    borderColor: '#ced4da',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    marginBottom: 15,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    color: '#495057',
   },
   notesInput: {
       minHeight: 80,

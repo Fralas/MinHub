@@ -160,8 +160,11 @@ export default function CalendarScreen() {
     }
 
     const triggerDateTime = new Date(eventDateTime.getTime() - event.reminderOffset * 60000);
+    const now = Date.now();
+    const secondsUntilTrigger = (triggerDateTime.getTime() - now) / 1000;
 
-    if (triggerDateTime.getTime() <= Date.now()) {
+
+    if (secondsUntilTrigger <= 0) {
       console.log('Reminder time is in the past, not scheduling for event:', event.title);
       if (event.notificationId) await Notifications.cancelScheduledNotificationAsync(event.notificationId);
       return null;
@@ -172,14 +175,7 @@ export default function CalendarScreen() {
         await Notifications.cancelScheduledNotificationAsync(event.notificationId);
       }
 
-      const triggerInput: Notifications.NotificationTriggerInput = {
-        year: triggerDateTime.getFullYear(),
-        month: triggerDateTime.getMonth() + 1,
-        day: triggerDateTime.getDate(),
-        hour: triggerDateTime.getHours(),
-        minute: triggerDateTime.getMinutes(),
-        repeats: false,
-      };
+      const calculatedSeconds = Math.max(1, Math.round(secondsUntilTrigger));
 
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
@@ -187,9 +183,9 @@ export default function CalendarScreen() {
           body: `${event.title}${event.startTime ? ` at ${event.startTime}` : ''}`,
           data: { eventId: event.id, url: `/calendar?date=${event.date}` },
         },
-        trigger: triggerInput,
+        trigger: calculatedSeconds as any,
       });
-      console.log(`Notification scheduled for ${event.title}: ${notificationId} at ${triggerDateTime}`);
+      console.log(`Notification scheduled for ${event.title}: ${notificationId} in ${calculatedSeconds}s`);
       return notificationId;
     } catch (e) {
       console.error("Error scheduling notification:", e);
