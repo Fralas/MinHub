@@ -36,6 +36,7 @@ export default function HomeScreen() {
             <Text style={styles.iconText}>Reminders</Text>
           </TouchableOpacity>
         </Link>
+        
 
         <Link href="/App_inApp/Calendar/calendar" asChild>
           <TouchableOpacity style={styles.iconButton}>
