@@ -36,7 +36,6 @@ export default function HomeScreen() {
             <Text style={styles.iconText}>Reminders</Text>
           </TouchableOpacity>
         </Link>
-        
 
         <Link href="/App_inApp/Calendar/calendar" asChild>
           <TouchableOpacity style={styles.iconButton}>
@@ -53,6 +52,12 @@ export default function HomeScreen() {
         <Link href="/App_inApp/Pomodoro/pomodoro" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Pomostudy</Text>
+          </TouchableOpacity>
+        </Link>
+
+        <Link href="/App_inApp/Food/foodScheduler" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Food</Text>
           </TouchableOpacity>
         </Link>
 
