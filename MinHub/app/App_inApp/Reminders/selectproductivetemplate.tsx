@@ -1,6 +1,6 @@
-import { Stack, useRouter } from 'expo-router';
+/*import { Stack, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { PRESET_PRODUCTIVE_REMINDERS, ProductiveReminderTemplate, getVerboseTemplateDetails } from '../data/templates';
 
 export default function SelectProductiveTemplateScreen() {
@@ -13,9 +13,9 @@ export default function SelectProductiveTemplateScreen() {
     setLastSelectedId(template.id); 
 
     if (router.canGoBack()) {
-        router.replace({ pathname: '/reminders', params: { selectedTemplateId: template.id, sourceScreen: 'selectproductive' } });
+        router.replace({ pathname: '/App_inApp/Reminders/reminders', params: { selectedTemplateId: template.id, sourceScreen: 'selectproductive' } });
     } else {
-        router.push({ pathname: '/reminders', params: { selectedTemplateId: template.id, sourceScreen: 'selectproductive' } });
+        router.push({ pathname: '/App_inApp/Reminders/reminders', params: { selectedTemplateId: template.id, sourceScreen: 'selectproductive' } });
     }
   };
   
@@ -25,7 +25,7 @@ export default function SelectProductiveTemplateScreen() {
       templatesToFilter = templatesToFilter.filter(template =>
         template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        template.keywords.some(keyword => keyword.toLowerCase().includes(searchTerm.toLowerCase()))
+        template.keywords.some((keyword: string) => keyword.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     if (sortOrder === 'asc') {
@@ -170,4 +170,4 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontSize: 13,
   },
-});
+});*/

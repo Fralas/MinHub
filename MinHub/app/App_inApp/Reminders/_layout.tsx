@@ -29,7 +29,7 @@ export default function RemindersLayout() {
           fontWeight: '600',
           fontSize: 17,
         },
-        headerBackTitleVisible: false,
+        headerBackTitle: ' '
       }}
     >
       <Stack.Screen 

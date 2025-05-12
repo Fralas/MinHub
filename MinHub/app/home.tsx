@@ -19,6 +19,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/diary" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Diaryy</Text>
+          </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/Calculator/calculator" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Calculator</Text>
@@ -36,7 +42,7 @@ export default function HomeScreen() {
             <Text style={styles.iconText}>Reminders</Text>
           </TouchableOpacity>
         </Link>
-        
+
 
         <Link href="/App_inApp/Calendar/calendar" asChild>
           <TouchableOpacity style={styles.iconButton}>

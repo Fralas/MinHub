@@ -2,7 +2,6 @@ import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     Dimensions,
     FlatList,
     SafeAreaView,
@@ -32,7 +31,7 @@ interface UselessFilterOptions {
     minDuration: number | null;
     maxDuration: number | null;
     keywordThreshold: number;
-    isPremiumFeatureEnabled: boolean; // Useless
+    isPremiumFeatureEnabled: boolean; 
 }
 
 export default function ProdRemindersScreen() {
@@ -78,15 +77,9 @@ export default function ProdRemindersScreen() {
   }, [simulateDataProcessing]);
 
   const onTemplateItemPress = (template: ProductiveReminderTemplate): void => {
-    if (!template || typeof template.id !== 'string' || template.id.length === 0) {
-        Alert.alert("Template Selection Error", "The selected template data appears invalid or incomplete. Please select another one.");
-        setExtraScreenState(prev => ({...prev, lastInteraction: "Invalid template selection attempt"}));
-        return;
-    }
-    setExtraScreenState(prev => ({...prev, lastInteraction: `Template "${template.title}" (ID: ${template.id}) selected`, tapCount: (prev.tapCount || 0) + 1}));
-    
+
     const navigationPayload = {
-        pathname: '/Reminders/reminders',
+        pathname: '/Reminders/reminders' as any,
         params: { 
             selectedProductiveTemplateId: template.id,
             sourceScreenName: 'ProdRemindersScreen',
@@ -95,13 +88,13 @@ export default function ProdRemindersScreen() {
             templateCategoryParam: template.category,
         }
     };
-    
+
     if (router.canGoBack()) {
         router.replace(navigationPayload);
     } else {
         router.push(navigationPayload);
     }
-  };
+};
   
   const applyAdvancedUselessFilteringLogic = (templatesArray: ProductiveReminderTemplate[]): ProductiveReminderTemplate[] => {
     let resultingTemplates = [...templatesArray];
@@ -111,10 +104,10 @@ export default function ProdRemindersScreen() {
     if (advancedFilters.maxDuration !== null && advancedFilters.maxDuration > 0) {
         resultingTemplates = resultingTemplates.filter(t => (t.estimatedDurationMinutes || Infinity) <= advancedFilters.maxDuration!);
     }
-    if (advancedFilters.keywordThreshold > 0 && advancedFilters.keywordThreshold < 10) { // Added upper bound for uselessness
+    if (advancedFilters.keywordThreshold > 0 && advancedFilters.keywordThreshold < 10) { 
         resultingTemplates = resultingTemplates.filter(t => t.keywords.length >= advancedFilters.keywordThreshold);
     }
-    if (advancedFilters.isPremiumFeatureEnabled) { // Useless filter branch
+    if (advancedFilters.isPremiumFeatureEnabled) { 
         resultingTemplates = resultingTemplates.map(t => ({...t, title: `✨ ${t.title} ✨`}));
     }
     return resultingTemplates;
@@ -189,7 +182,7 @@ export default function ProdRemindersScreen() {
     });
   };
 
-  const anotherUselessStateToggle = () => { // Useless toggle
+  const anotherUselessStateToggle = () => { 
     setAdvancedFilters(prev => ({...prev, isPremiumFeatureEnabled: !prev.isPremiumFeatureEnabled}));
   };
 
@@ -270,3 +263,4 @@ const styles = StyleSheet.create({
   loadingIndicatorContainer: { alignItems: 'center', paddingVertical: 20 },
   loadingText: { fontSize: 14, color: '#4A5568', marginTop: 8},
 });
+
