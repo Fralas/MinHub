@@ -19,9 +19,9 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
-        <Link href="/diary" asChild>
+        <Link href="/App_inApp/Diary/diary" asChild>
           <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Diaryy</Text>
+            <Text style={styles.iconText}>Diary</Text>
           </TouchableOpacity>
         </Link>
 

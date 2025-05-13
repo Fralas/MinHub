@@ -1,0 +1,125 @@
+/* diaryCSS.css */
+/* Stile base per la pagina del diario */
+.diary-container {
+    background-color: #f8f4e8; /* Colore carta anticata */
+    background-image: linear-gradient(to bottom, #f8f4e8 0%, #f8f4e8 24px, #e5e2d6 25px);
+    background-size: 100% 25px;
+    padding: 30px;
+    padding-left: 50px;
+    padding-right: 50px;
+    font-family: 'Courier New', monospace;
+    line-height: 25px;
+    position: relative;
+    border: 1px solid #d3c9a5;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Effetti di bordo per la carta */
+.diary-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 40px;
+    height: 100%;
+    width: 2px;
+    background: rgba(200, 180, 140, 0.5);
+}
+
+/* Intestazione del diario */
+.diary-header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #d3c9a5;
+    padding-bottom: 15px;
+    color: #5a4a3a;
+    font-family: 'Brush Script MT', cursive;
+    font-size: 2.2em;
+}
+
+/* Stile per la data */
+.entry-date {
+    font-weight: bold;
+    color: #8b7355;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+}
+
+/* Stile per il contenuto dell'entry */
+.entry-content {
+    margin-bottom: 25px;
+    text-align: justify;
+    color: #3a3a3a;
+    font-size: 1em;
+}
+
+/* Stile per il titolo dell'entry */
+.entry-title {
+    font-weight: bold;
+    color: #5a4a3a;
+    margin-bottom: 10px;
+    font-size: 1.3em;
+    border-bottom: 1px dashed #d3c9a5;
+    padding-bottom: 5px;
+}
+
+/* Stile per i tag */
+.entry-tags {
+    font-style: italic;
+    color: #8b7355;
+    font-size: 0.9em;
+    margin-top: 15px;
+}
+
+/* Stile per lo stato d'animo */
+.entry-mood {
+    display: inline-block;
+    background-color: rgba(200, 180, 140, 0.3);
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    font-size: 0.9em;
+    color: #5a4a3a;
+}
+
+/* Stile per il rating */
+.entry-rating {
+    font-size: 1.2em;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+/* Stile per i pulsanti */
+.diary-button {
+    background-color: #f8f4e8;
+    border: 1px solid #d3c9a5;
+    color: #5a4a3a;
+    padding: 8px 15px;
+    margin: 5px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.diary-button:hover {
+    background-color: #e5e2d6;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+/* Stile per il footer */
+.diary-footer {
+    margin-top: 30px;
+    border-top: 1px solid #d3c9a5;
+    padding-top: 15px;
+    text-align: right;
+    font-size: 0.8em;
+    color: #8b7355;
+}
+
+/* Effetto di macchia d'inchiostro casuale */
+.ink-blot {
+    position: absolute;
+    opacity: 0.1;
+    background-color: #5a4a3a;
+    border-radius: 50%;
+    filter: blur(1px);
+}
