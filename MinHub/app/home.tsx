@@ -43,6 +43,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/Food/foodScheduler" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Food</Text>
+          </TouchableOpacity>
+        </Link>
+
 
         <Link href="/App_inApp/Calendar/calendar" asChild>
           <TouchableOpacity style={styles.iconButton}>

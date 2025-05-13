@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { PRESET_PRODUCTIVE_REMINDERS, getTemplateByIdHelper } from '../../data/templates';
 
+
 interface Reminder {
   id: string;
   title: string;
@@ -45,6 +46,47 @@ Notifications.setNotificationHandler({
   }),
 });
 
+const getTodayDateStringHelper = (): string => {
+  const todayDate = new Date();
+  return `${todayDate.getFullYear()}-${(todayDate.getMonth() + 1).toString().padStart(2, '0')}-${todayDate.getDate().toString().padStart(2, '0')}`;
+};
+
+const convertDateToStorageFormatHelper = (dateInstance: Date): string => {
+  if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
+      const nowInstance = new Date();
+      return `${nowInstance.getFullYear()}-${(nowInstance.getMonth() + 1).toString().padStart(2, '0')}-${nowInstance.getDate().toString().padStart(2, '0')}`;
+  }
+  return dateInstance.toISOString().split('T')[0];
+};
+
+const convertTimeToStorageFormatHelper = (dateInstance: Date): string => {
+   if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
+      const nowInstance = new Date();
+      return `${nowInstance.getHours().toString().padStart(2, '0')}:${nowInstance.getMinutes().toString().padStart(2, '0')}`;
+  }
+  return dateInstance.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+const verifyAndFormatDateTimeHelper = (dateObj: Date): { dateStr: string; timeStr: string } => {
+    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const day = now.getDate().toString().padStart(2, '0');
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
+    }
+  
+    const year = dateObj.getFullYear();
+    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const day = dateObj.getDate().toString().padStart(2, '0');
+    const hours = dateObj.getHours().toString().padStart(2, '0');
+    const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+    
+    return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
+};
+
 export default function RemindersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ selectedProductiveTemplateId?: string }>();
@@ -65,27 +107,6 @@ export default function RemindersScreen() {
   
   const [lastProcessedTemplateParamId, setLastProcessedTemplateParamId] = useState<string | undefined>(undefined);
   const [internalScreenCounter, setInternalScreenCounter] = useState<number>(0); 
-
-  const generateTodayDateStringForFilter = (): string => {
-    const todayDate = new Date();
-    return `${todayDate.getFullYear()}-${(todayDate.getMonth() + 1).toString().padStart(2, '0')}-${todayDate.getDate().toString().padStart(2, '0')}`;
-  };
-
-  const convertDateToStorageFormat = (dateInstance: Date): string => {
-    if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
-        const nowInstance = new Date();
-        return `${nowInstance.getFullYear()}-${(nowInstance.getMonth() + 1).toString().padStart(2, '0')}-${nowInstance.getDate().toString().padStart(2, '0')}`;
-    }
-    return dateInstance.toISOString().split('T')[0];
-  };
-
-  const convertTimeToStorageFormat = (dateInstance: Date): string => {
-     if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
-        const nowInstance = new Date();
-        return `${nowInstance.getHours().toString().padStart(2, '0')}:${nowInstance.getMinutes().toString().padStart(2, '0')}`;
-    }
-    return dateInstance.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-  };
 
   const requestSystemNotificationPermissions = async (): Promise<boolean> => {
     const { status: existingStatusPermission } = await Notifications.getPermissionsAsync();
@@ -112,7 +133,7 @@ export default function RemindersScreen() {
     requestSystemNotificationPermissions();
   }, []);
 
-  const applySortingToReminders = (remindersArray: Reminder[]): Reminder[] => {
+  const applySortingToReminders = useCallback((remindersArray: Reminder[]): Reminder[] => {
     const tempArray = [...remindersArray];
     tempArray.sort((itemA, itemB) => {
       const dateTimeNumA = new Date(`${itemA.date}T${itemA.time || '00:00'}`).getTime();
@@ -123,7 +144,7 @@ export default function RemindersScreen() {
       return dateTimeNumA - dateTimeNumB;
     });
     return tempArray;
-  };
+  }, []);
 
   const persistRemindersToStorage = async (remindersToPersist: Reminder[]) => {
     try {
@@ -147,7 +168,7 @@ export default function RemindersScreen() {
     } finally {
       setIsDataLoading(false);
     }
-  }, []);
+  }, [applySortingToReminders]);
   
   useEffect(() => {
     if (params.selectedProductiveTemplateId && params.selectedProductiveTemplateId !== lastProcessedTemplateParamId) {
@@ -183,7 +204,10 @@ export default function RemindersScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      retrieveRemindersFromStorage();
+      const performLoad = async () => {
+        await retrieveRemindersFromStorage();
+      };
+      performLoad();
     }, [retrieveRemindersFromStorage])
   );
 
@@ -254,7 +278,7 @@ export default function RemindersScreen() {
   const processAndSaveReminder = async () => {
     const titleToSave = reminderFormTitle.trim();
     if (titleToSave === '') { Alert.alert('Input Error', 'Reminder title is mandatory.'); return; }
-    const {dateStr: reminderDateString, timeStr: reminderTimeString} = verifyAndFormatDateTime(reminderFormDateTime); 
+    const {dateStr: reminderDateString, timeStr: reminderTimeString} = verifyAndFormatDateTimeHelper(reminderFormDateTime); 
     let finalRemindersList: Reminder[];
     let reminderToFinalize: Reminder;
 
@@ -273,26 +297,6 @@ export default function RemindersScreen() {
     await persistRemindersToStorage(finalRemindersList);
     setIsModalEditorVisible(false);
   };
-
-  const verifyAndFormatDateTime = (dateObj: Date): { dateStr: string; timeStr: string } => {
-  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
-  }
-
-  const year = dateObj.getFullYear();
-  const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-  const day = dateObj.getDate().toString().padStart(2, '0');
-  const hours = dateObj.getHours().toString().padStart(2, '0');
-  const minutes = dateObj.getMinutes().toString().padStart(2, '0');
-  
-  return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
-};
 
   const confirmAndDeleteReminder = async (reminderIdToDelete: string) => {
     Alert.alert('Confirm Deletion', 'Are you sure you want to delete this reminder?', [
@@ -347,7 +351,7 @@ export default function RemindersScreen() {
   };
 
   const activeFilteredReminders = useMemo(() => {
-    const todayFormatted = getTodayDateString();
+    const todayFormatted = getTodayDateStringHelper();
     let currentlyFiltered: Reminder[];
     switch (activeFilterOption) {
       case 'pending': currentlyFiltered = remindersList.filter(r => !r.isCompleted); break;
@@ -356,21 +360,13 @@ export default function RemindersScreen() {
       case 'all': default: currentlyFiltered = remindersList;
     }
     return applySortingToReminders(currentlyFiltered);
-  }, [remindersList, activeFilterOption]);
+  }, [remindersList, activeFilterOption, applySortingToReminders]);
 
   const renderFilterOptionButton = (filterKey: FilterOption, buttonTextLabel: string) => (
     <TouchableOpacity style={[styles.filterButton, activeFilterOption === filterKey && styles.filterButtonActive]} onPress={() => {setActiveFilterOption(filterKey);}}>
       <Text style={[styles.filterButtonText, activeFilterOption === filterKey && styles.filterButtonTextActive]}>{buttonTextLabel}</Text>
     </TouchableOpacity>
   );
-
-  const getTodayDateString = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = (today.getMonth() + 1).toString().padStart(2, '0');
-  const day = today.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
   const renderSingleReminderItem = ({ item }: { item: Reminder }) => (
     <View style={[styles.reminderItemCard, item.isCompleted && styles.reminderItemCardCompleted]}>
@@ -413,9 +409,9 @@ export default function RemindersScreen() {
             <View style={styles.modalInnerContentContainer}>
               <Text style={styles.modalMainTitle}>{currentEditingReminder ? 'Edit This Reminder' : 'Create New Reminder'}</Text>
               <TextInput style={styles.modalFormField} placeholder="Reminder Title (e.g., Call John)" value={reminderFormTitle} onChangeText={setReminderFormTitle} autoFocus={!currentEditingReminder}/>
-              <TouchableOpacity onPress={() => {setIsDatePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Date: {convertDateToStorageFormat(reminderFormDateTime)}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => {setIsDatePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Date: {convertDateToStorageFormatHelper(reminderFormDateTime)}</Text></TouchableOpacity>
               {isDatePickerVisible && ( <DateTimePicker value={reminderFormDateTime} mode="date" display={Platform.OS === 'ios' ? 'spinner': 'default'} onChange={handleDateChangeFromPicker}/> )}
-              <TouchableOpacity onPress={() => {setIsTimePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Time: {convertTimeToStorageFormat(reminderFormDateTime)}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => {setIsTimePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Time: {convertTimeToStorageFormatHelper(reminderFormDateTime)}</Text></TouchableOpacity>
               {isTimePickerVisible && ( <DateTimePicker value={reminderFormDateTime} mode="time" display={Platform.OS === 'ios' ? 'spinner': 'default'} is24Hour={true} onChange={handleTimeChangeFromPicker}/> )}
               <TextInput style={[styles.modalFormField, styles.textAreaField]} placeholder="Additional Notes (Optional)" value={reminderFormNotes} onChangeText={setReminderFormNotes} multiline numberOfLines={4}/>
               <View style={styles.modalActionButtonsRow}><TouchableOpacity style={[styles.genericModalButton, styles.modalCancelButton]} onPress={() => {setIsModalEditorVisible(false);}}><Text style={styles.modalButtonTextContent}>Cancel</Text></TouchableOpacity><TouchableOpacity style={[styles.genericModalButton, styles.modalSaveButton]} onPress={processAndSaveReminder}><Text style={styles.modalButtonTextContent}>{currentEditingReminder ? 'Save Changes' : 'Add Reminder'}</Text></TouchableOpacity></View>

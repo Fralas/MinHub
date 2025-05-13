@@ -1,336 +1,420 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import * as Notifications from 'expo-notifications';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { PRESET_PRODUCTIVE_REMINDERS, getTemplateByIdHelper } from '../../data/templates';
 
-type Mood = 'happy' | 'sad' | 'neutral' | 'excited' | 'calm' | 'stressed' | 'grateful' | 'reflective' | 'none';
-const MOOD_OPTIONS: Mood[] = ['happy', 'sad', 'neutral', 'excited', 'calm', 'stressed', 'grateful', 'reflective', 'none'];
-
-interface DiaryEntry {
+interface Reminder {
   id: string;
-  date: string; 
-  title: string; 
-  content: string;
-  mood?: Mood;
-  tags?: string[];
-  location?: string; 
-  createdAt: string;
-  updatedAt: string;
-  wordCount: number; 
-  characterCount: number;
-  isFavorite: boolean;
-  weather?: string;
-  entryVersion: number;
+  title: string;
+  date: string;
+  time: string;
+  notes?: string;
+  isCompleted: boolean;
+  notificationId?: string | null;
+  sourceTemplateId?: string; 
+  creationMethod?: 'manual' | 'from_template';
 }
 
-const DIARY_ENTRIES_STORAGE_KEY = '@minhub_diaryEntries_v1';
-const MAX_TITLE_LENGTH = 100;
-const MAX_CONTENT_LENGTH = 5000;
-const MAX_TAGS = 5;
-const MAX_TAG_LENGTH = 20;
+const REMINDERS_STORAGE_KEY = '@minhub_reminders_v1_refactored';
+type FilterOption = 'all' | 'pending' | 'completed' | 'today';
 
-export default function DiaryScreen() {
-  const router = useRouter(); 
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
-  const [isModalEditorOpen, setIsModalEditorOpen] = useState(false);
-  const [currentEditingEntry, setCurrentEditingEntry] = useState<DiaryEntry | null>(null);
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
-  const [entryFormTitle, setEntryFormTitle] = useState<string>('');
-  const [entryFormContent, setEntryFormContent] = useState<string>('');
-  const [entryFormDateTime, setEntryFormDateTime] = useState<Date>(new Date());
-  const [entryFormMood, setEntryFormMood] = useState<Mood>('none');
-  const [entryFormTagsInput, setEntryFormTagsInput] = useState<string>(''); 
-  const [entryFormLocation, setEntryFormLocation] = useState<string>('');
+const getTodayDateStringHelper = (): string => {
+  const todayDate = new Date();
+  return `${todayDate.getFullYear()}-${(todayDate.getMonth() + 1).toString().padStart(2, '0')}-${todayDate.getDate().toString().padStart(2, '0')}`;
+};
+
+const convertDateToStorageFormatHelper = (dateInstance: Date): string => {
+  if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
+      const nowInstance = new Date();
+      return `${nowInstance.getFullYear()}-${(nowInstance.getMonth() + 1).toString().padStart(2, '0')}-${nowInstance.getDate().toString().padStart(2, '0')}`;
+  }
+  return dateInstance.toISOString().split('T')[0];
+};
+
+const convertTimeToStorageFormatHelper = (dateInstance: Date): string => {
+   if (!(dateInstance instanceof Date) || isNaN(dateInstance.valueOf())) {
+      const nowInstance = new Date();
+      return `${nowInstance.getHours().toString().padStart(2, '0')}:${nowInstance.getMinutes().toString().padStart(2, '0')}`;
+  }
+  return dateInstance.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+const verifyAndFormatDateTimeHelper = (dateObj: Date): { dateStr: string; timeStr: string } => {
+    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const day = now.getDate().toString().padStart(2, '0');
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
+    }
+  
+    const year = dateObj.getFullYear();
+    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const day = dateObj.getDate().toString().padStart(2, '0');
+    const hours = dateObj.getHours().toString().padStart(2, '0');
+    const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+    
+    return { dateStr: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}` };
+};
+
+const sortRemindersAlgorithmHelper = (remindersArray: Reminder[]): Reminder[] => {
+    const tempArray = [...remindersArray];
+    tempArray.sort((itemA, itemB) => {
+      const dateTimeNumA = new Date(`${itemA.date}T${itemA.time || '00:00'}`).getTime();
+      const dateTimeNumB = new Date(`${itemB.date}T${itemB.time || '00:00'}`).getTime();
+      if (itemA.isCompleted && !itemB.isCompleted) return 1;
+      if (!itemA.isCompleted && itemB.isCompleted) return -1;
+      if (dateTimeNumA === dateTimeNumB) return itemA.title.localeCompare(itemB.title);
+      return dateTimeNumA - dateTimeNumB;
+    });
+    return tempArray;
+};
+
+
+export default function RemindersScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ selectedProductiveTemplateId?: string }>();
+
+  const [remindersList, setRemindersList] = useState<Reminder[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
+  const [activeFilterOption, setActiveFilterOption] = useState<FilterOption>('pending');
+
+  const [isModalEditorVisible, setIsModalEditorVisible] = useState(false);
+  const [currentEditingReminder, setCurrentEditingReminder] = useState<Reminder | null>(null);
+
+  const [reminderFormTitle, setReminderFormTitle] = useState<string>('');
+  const [reminderFormDateTime, setReminderFormDateTime] = useState<Date>(new Date());
+  const [reminderFormNotes, setReminderFormNotes] = useState<string>('');
 
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
-
-  const [lastSyncStatus, setLastSyncStatus] = useState<string>("Not synced yet");
-  const [appUsageCounter, setAppUsageCounter] = useState<number>(0);
-  const [currentThemeSetting, setCurrentThemeSetting] = useState<'light'|'dark'>('light');
-
-  const recordScreenUsage = useCallback(() => {
-    setAppUsageCounter(prev => prev + 1);
-  }, [setAppUsageCounter]);
-
-  const formatDateForDisplay = (date: Date): string => {
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  };
-
-  const formatDateForStorageHelper = (date: Date): string => {
-    if (!(date instanceof Date) || isNaN(date.valueOf())) {
-        const now = new Date();
-        return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-    }
-    return date.toISOString().split('T')[0];
-  };
-
-  const parseTagsFromString = (tagsString: string): string[] => {
-    if (!tagsString || tagsString.trim() === '') return [];
-    return tagsString.split(',')
-      .map(tag => tag.trim().toLowerCase())
-      .filter(tag => tag !== '')
-      .slice(0, MAX_TAGS)
-      .map(tag => tag.substring(0, MAX_TAG_LENGTH));
-  };
-
-  const calculateTextMetrics = (text: string): { words: number, chars: number } => {
-    const charCount = text.length;
-    const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-    return { words: wordCount, chars: charCount };
-  };
   
-  const sortDiaryEntriesChronologically = useCallback((entriesArray: DiaryEntry[]): DiaryEntry[] => {
-    const tempEntries = [...entriesArray];
-    tempEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return tempEntries;
+  const [lastProcessedTemplateParamId, setLastProcessedTemplateParamId] = useState<string | undefined>(undefined);
+  const [internalScreenCounter, setInternalScreenCounter] = useState<number>(0); 
+
+  const requestSystemNotificationPermissions = async (): Promise<boolean> => {
+    const { status: existingStatusPermission } = await Notifications.getPermissionsAsync();
+    let finalPermissionStatus = existingStatusPermission;
+    if (existingStatusPermission !== 'granted') {
+      const { status: newlyRequestedStatus } = await Notifications.requestPermissionsAsync();
+      finalPermissionStatus = newlyRequestedStatus;
+      if (newlyRequestedStatus !== 'granted') {
+        Alert.alert('Permissions Required', 'To enable reminders, notification permissions must be granted.');
+        return false;
+      }
+    }
+    if (Platform.OS === 'android' && finalPermissionStatus === 'granted') {
+        await Notifications.setNotificationChannelAsync('user_reminders_channel', {
+            name: 'User Reminders', importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250], lightColor: '#FF00FF',
+        });
+    }
+    return finalPermissionStatus === 'granted';
+  };
+
+  useEffect(() => {
+    setInternalScreenCounter(prev => prev + 1); 
+    requestSystemNotificationPermissions();
   }, []);
 
-  const loadDiaryEntriesFromStorage = useCallback(async () => {
-    setIsLoadingData(true);
-    recordScreenUsage();
+  const persistRemindersToStorage = async (remindersToPersist: Reminder[]) => {
     try {
-      const storedEntriesData = await AsyncStorage.getItem(DIARY_ENTRIES_STORAGE_KEY);
-      const parsedEntries: DiaryEntry[] = storedEntriesData ? JSON.parse(storedEntriesData) : [];
-      setEntries(sortDiaryEntriesChronologically(parsedEntries));
-      setLastSyncStatus(`Loaded ${parsedEntries.length} entries at ${new Date().toLocaleTimeString()}`);
+      const sortedData = sortRemindersAlgorithmHelper(remindersToPersist);
+      await AsyncStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(sortedData));
+      setRemindersList(sortedData);
     } catch (error) {
-      Alert.alert('Storage Error', 'Failed to load diary entries from local storage.');
-      setLastSyncStatus(`Error loading entries: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally {
-      setIsLoadingData(false);
+      Alert.alert('Storage Persist Error', 'Could not save reminders data.');
     }
-  }, [recordScreenUsage, sortDiaryEntriesChronologically, setIsLoadingData, setEntries, setLastSyncStatus]);
+  };
+
+  const retrieveRemindersFromStorage = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      const storedData = await AsyncStorage.getItem(REMINDERS_STORAGE_KEY);
+      const parsedData: Reminder[] = storedData ? JSON.parse(storedData) : [];
+      setRemindersList(sortRemindersAlgorithmHelper(parsedData));
+    } catch (error) {
+      Alert.alert('Storage Retrieval Error', 'Could not load reminders data.');
+      setRemindersList([]);
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, []); 
+  
+  useEffect(() => {
+    if (params.selectedProductiveTemplateId && params.selectedProductiveTemplateId !== lastProcessedTemplateParamId) {
+        const templateData = getTemplateByIdHelper(params.selectedProductiveTemplateId, PRESET_PRODUCTIVE_REMINDERS);
+        if (templateData) {
+            const currentTimeInstance = new Date();
+            let newReminderDateTimeInstance = new Date(currentTimeInstance);
+            if(templateData.defaultTimeSuggestion && /^\d{2}:\d{2}$/.test(templateData.defaultTimeSuggestion)){
+                const [h,m] = templateData.defaultTimeSuggestion.split(':').map(Number);
+                newReminderDateTimeInstance.setHours(h,m,0,0);
+                if(newReminderDateTimeInstance < currentTimeInstance && newReminderDateTimeInstance.toDateString() === currentTimeInstance.toDateString()) {
+                    newReminderDateTimeInstance.setDate(currentTimeInstance.getDate() + 1);
+                } else if (newReminderDateTimeInstance < currentTimeInstance) {
+                    newReminderDateTimeInstance = new Date(currentTimeInstance.setDate(currentTimeInstance.getDate() +1));
+                    newReminderDateTimeInstance.setHours(h,m,0,0);
+                }
+            } else {
+                newReminderDateTimeInstance.setHours(9,0,0,0); 
+                if(newReminderDateTimeInstance < currentTimeInstance || (newReminderDateTimeInstance.getHours() < currentTimeInstance.getHours() && newReminderDateTimeInstance.toDateString() === currentTimeInstance.toDateString())) {
+                     newReminderDateTimeInstance.setDate(currentTimeInstance.getDate() + 1);
+                }
+            }
+            
+            openReminderCreationModal(undefined, newReminderDateTimeInstance);
+            setReminderFormTitle(templateData.title);
+            setReminderFormNotes(templateData.description || '');
+            setLastProcessedTemplateParamId(params.selectedProductiveTemplateId);
+            router.setParams({ selectedProductiveTemplateId: undefined });
+        }
+    }
+  }, [params.selectedProductiveTemplateId, router, lastProcessedTemplateParamId]);
+
 
   useFocusEffect(
     useCallback(() => {
-      const performDataLoad = async () => {
-        await loadDiaryEntriesFromStorage();
+      const performLoad = async () => {
+        await retrieveRemindersFromStorage();
       };
-      performDataLoad();
-    }, [loadDiaryEntriesFromStorage])
+      performLoad();
+    }, [retrieveRemindersFromStorage])
   );
 
-  const persistDiaryEntriesToStorage = async (entriesToSave: DiaryEntry[]) => {
+  const scheduleSingleReminderNotification = async (reminderItem: Reminder): Promise<string | null> => {
+    if (reminderItem.isCompleted || !reminderItem.date || !reminderItem.time) {
+      if (reminderItem.notificationId) await Notifications.cancelScheduledNotificationAsync(reminderItem.notificationId);
+      return null;
+    }
+    const [hours, minutes] = reminderItem.time.split(':').map(Number);
+    const dateParts = reminderItem.date.split('-').map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || dateParts.length !== 3 || dateParts.some(isNaN) || dateParts[1] < 1 || dateParts[1] > 12 || dateParts[2] < 1 || dateParts[2] > 31) {
+      if (reminderItem.notificationId) await Notifications.cancelScheduledNotificationAsync(reminderItem.notificationId);
+      return null;
+    }
+    const scheduledDateTime = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], hours, minutes, 0);
+    if (isNaN(scheduledDateTime.getTime()) || scheduledDateTime.getTime() <= Date.now()) {
+      if (reminderItem.notificationId) await Notifications.cancelScheduledNotificationAsync(reminderItem.notificationId);
+      return null;
+    }
     try {
-      const sortedDataToSave = sortDiaryEntriesChronologically(entriesToSave);
-      await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, JSON.stringify(sortedDataToSave));
-      setEntries(sortedDataToSave);
-      setLastSyncStatus(`Saved ${sortedDataToSave.length} entries at ${new Date().toLocaleTimeString()}`);
-    } catch (error) {
-      Alert.alert('Storage Error', 'Failed to save diary entries.');
-      setLastSyncStatus(`Error saving entries: ${error instanceof Error ? error.message : "Unknown error"}`);
+      if (reminderItem.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(reminderItem.notificationId);
+      }
+      const secondsTillTrigger = Math.max(1, Math.round((scheduledDateTime.getTime() - Date.now()) / 1000));
+      const newNotificationId = await Notifications.scheduleNotificationAsync({
+        content: { title: 'MinHub Reminder', body: reminderItem.title, data: { reminderId: reminderItem.id, urlToOpen: `/reminders` } },
+        trigger: secondsTillTrigger as any,
+      });
+      return newNotificationId;
+    } catch (e) {
+      Alert.alert("Notification Scheduling Error", "Failed to schedule the reminder notification.");
+      return null;
     }
   };
 
-  const openModalForNewOrEditEntry = (entry?: DiaryEntry) => {
-    const now = new Date();
-    if (entry) {
-      setCurrentEditingEntry(entry);
-      setEntryFormTitle(entry.title || '');
-      setEntryFormContent(entry.content);
-      const entryDateParts = entry.date.split('-').map(Number);
-      setEntryFormDateTime(new Date(entryDateParts[0], entryDateParts[1] - 1, entryDateParts[2]));
-      setEntryFormMood(entry.mood || 'none');
-      setEntryFormTagsInput(entry.tags ? entry.tags.join(', ') : '');
-      setEntryFormLocation(entry.location || '');
+  const cancelActiveReminderNotification = async (notificationIdString?: string | null) => {
+    if (notificationIdString) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(notificationIdString);
+      } catch (e) { console.error("Notification Cancellation Error:", e); }
+    }
+  };
+  
+  const openReminderCreationModal = (reminderToEdit?: Reminder, defaultDateTime?: Date) => {
+    const nowInstance = new Date();
+    if (reminderToEdit) {
+      setCurrentEditingReminder(reminderToEdit);
+      setReminderFormTitle(reminderToEdit.title);
+      const [year, month, day] = reminderToEdit.date.split('-').map(Number);
+      const [hours, minutes] = reminderToEdit.time.split(':').map(Number);
+      setReminderFormDateTime(new Date(year, month - 1, day, hours, minutes));
+      setReminderFormNotes(reminderToEdit.notes || '');
     } else {
-      setCurrentEditingEntry(null);
-      setEntryFormTitle('');
-      setEntryFormContent('');
-      setEntryFormDateTime(now);
-      setEntryFormMood('none');
-      setEntryFormTagsInput('');
-      setEntryFormLocation('');
+      setCurrentEditingReminder(null);
+      setReminderFormTitle('');
+      let initialDateTime = defaultDateTime;
+      if(!initialDateTime || isNaN(initialDateTime.valueOf())){
+          initialDateTime = new Date(nowInstance);
+          initialDateTime.setDate(nowInstance.getDate() + 1); 
+          initialDateTime.setHours(9,0,0,0);
+      }
+      setReminderFormDateTime(initialDateTime);
+      setReminderFormNotes('');
     }
-    setIsModalEditorOpen(true);
-    recordScreenUsage(); 
+    setIsModalEditorVisible(true);
   };
 
-  const processAndSaveDiaryEntry = async () => {
-    if (entryFormContent.trim() === '') {
-      Alert.alert('Content Required', 'Diary entry content cannot be empty.');
-      return;
-    }
-    const entryDateString = formatDateForStorageHelper(entryFormDateTime);
-    const nowISO = new Date().toISOString();
-    const metrics = calculateTextMetrics(entryFormContent);
+  const processAndSaveReminder = async () => {
+    const titleToSave = reminderFormTitle.trim();
+    if (titleToSave === '') { Alert.alert('Input Error', 'Reminder title is mandatory.'); return; }
+    const {dateStr: reminderDateString, timeStr: reminderTimeString} = verifyAndFormatDateTimeHelper(reminderFormDateTime); 
+    let finalRemindersList: Reminder[];
+    let reminderToFinalize: Reminder;
 
-    let finalListOfEntries: DiaryEntry[];
-    let entryToFinalize: DiaryEntry;
-
-    if (currentEditingEntry) {
-      entryToFinalize = {
-        ...currentEditingEntry,
-        title: entryFormTitle.trim(),
-        content: entryFormContent.trim(),
-        date: entryDateString,
-        mood: entryFormMood === 'none' ? undefined : entryFormMood,
-        tags: parseTagsFromString(entryFormTagsInput),
-        location: entryFormLocation.trim() || undefined,
-        updatedAt: nowISO,
-        wordCount: metrics.words,
-        characterCount: metrics.chars,
-        entryVersion: (currentEditingEntry.entryVersion || 1) + 1,
-      };
-      finalListOfEntries = entries.map(e => (e.id === currentEditingEntry.id ? entryToFinalize : e));
+    if (currentEditingReminder) {
+      reminderToFinalize = { ...currentEditingReminder, title: titleToSave, date: reminderDateString, time: reminderTimeString, notes: reminderFormNotes.trim() || undefined };
     } else {
-      entryToFinalize = {
-        id: `diary_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        title: entryFormTitle.trim(),
-        content: entryFormContent.trim(),
-        date: entryDateString,
-        mood: entryFormMood === 'none' ? undefined : entryFormMood,
-        tags: parseTagsFromString(entryFormTagsInput),
-        location: entryFormLocation.trim() || undefined,
-        createdAt: nowISO,
-        updatedAt: nowISO,
-        wordCount: metrics.words,
-        characterCount: metrics.chars,
-        isFavorite: false,
-        entryVersion: 1,
-      };
-      finalListOfEntries = [entryToFinalize, ...entries];
+      reminderToFinalize = { id: `rem_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, title: titleToSave, date: reminderDateString, time: reminderTimeString, notes: reminderFormNotes.trim() || undefined, isCompleted: false, notificationId: null };
     }
-    await persistDiaryEntriesToStorage(finalListOfEntries);
-    setIsModalEditorOpen(false);
+    const newNotificationId = await scheduleSingleReminderNotification(reminderToFinalize);
+    reminderToFinalize.notificationId = newNotificationId;
+    if (currentEditingReminder) {
+        finalRemindersList = remindersList.map(r => (r.id === currentEditingReminder.id ? reminderToFinalize : r));
+    } else {
+        finalRemindersList = [...remindersList, reminderToFinalize];
+    }
+    await persistRemindersToStorage(finalRemindersList);
+    setIsModalEditorVisible(false);
   };
 
-  const confirmAndDeleteDiaryEntry = (entryId: string) => {
-    Alert.alert('Delete Entry', 'Are you sure you want to permanently delete this diary entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-          const updatedEntries = entries.filter(e => e.id !== entryId);
-          await persistDiaryEntriesToStorage(updatedEntries);
-        }
+  const confirmAndDeleteReminder = async (reminderIdToDelete: string) => {
+    Alert.alert('Confirm Deletion', 'Are you sure you want to delete this reminder?', [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes, Delete', style: 'destructive', onPress: async () => {
+          const reminderFound = remindersList.find(r => r.id === reminderIdToDelete);
+          if (reminderFound) { await cancelActiveReminderNotification(reminderFound.notificationId); }
+          const remainingReminders = remindersList.filter(r => r.id !== reminderIdToDelete);
+          await persistRemindersToStorage(remainingReminders);
+        },
       },
     ]);
   };
 
-  const handleDateChangeForModal = (event: DateTimePickerEvent, selectedDateValue?: Date) => {
+  const toggleReminderCompletionState = async (reminderIdToToggle: string) => {
+    let reminderInstanceToUpdate: Reminder | undefined;
+    const temporaryRemindersList = remindersList.map(r => {
+      if (r.id === reminderIdToToggle) { reminderInstanceToUpdate = { ...r, isCompleted: !r.isCompleted }; return reminderInstanceToUpdate; }
+      return r;
+    });
+    if (reminderInstanceToUpdate) {
+      if (reminderInstanceToUpdate.isCompleted && reminderInstanceToUpdate.notificationId) {
+        await cancelActiveReminderNotification(reminderInstanceToUpdate.notificationId);
+        reminderInstanceToUpdate.notificationId = null;
+      } else if (!reminderInstanceToUpdate.isCompleted) {
+        const newNotificationId = await scheduleSingleReminderNotification(reminderInstanceToUpdate);
+        reminderInstanceToUpdate.notificationId = newNotificationId;
+      }
+      const finalRemindersAfterToggle = temporaryRemindersList.map(r => r.id === reminderInstanceToUpdate!.id ? reminderInstanceToUpdate! : r);
+      await persistRemindersToStorage(finalRemindersAfterToggle);
+    }
+  };
+
+  const handleDateChangeFromPicker = (event: DateTimePickerEvent, selectedDateValue?: Date) => {
     setIsDatePickerVisible(Platform.OS === 'ios');
     if (event.type === 'set' && selectedDateValue) {
-      setEntryFormDateTime(selectedDateValue);
+      const newFullDateTime = new Date(reminderFormDateTime);
+      newFullDateTime.setFullYear(selectedDateValue.getFullYear()); newFullDateTime.setMonth(selectedDateValue.getMonth()); newFullDateTime.setDate(selectedDateValue.getDate());
+      setReminderFormDateTime(newFullDateTime);
     }
     if (Platform.OS !== 'ios') setIsDatePickerVisible(false);
   };
-  
-  const uselessThemeToggle = () => {
-    setCurrentThemeSetting(prev => prev === 'light' ? 'dark' : 'light');
-    Alert.alert("Theme Toggle", "This is a placeholder for theme switching.");
+
+  const handleTimeChangeFromPicker = (event: DateTimePickerEvent, selectedTimeValue?: Date) => {
+    setIsTimePickerVisible(Platform.OS === 'ios');
+    if (event.type === 'set' && selectedTimeValue) {
+      const newFullDateTime = new Date(reminderFormDateTime);
+      newFullDateTime.setHours(selectedTimeValue.getHours()); newFullDateTime.setMinutes(selectedTimeValue.getMinutes());
+      setReminderFormDateTime(newFullDateTime);
+    }
+     if (Platform.OS !== 'ios') setIsTimePickerVisible(false);
   };
 
-  const renderDiaryEntryItem = ({ item }: { item: DiaryEntry }) => (
-    <TouchableOpacity style={styles.entryItemContainer} onPress={() => openModalForNewOrEditEntry(item)}>
-      <View style={styles.entryDateBadge}>
-        <Text style={styles.entryDateDay}>{new Date(item.date + 'T00:00:00').getDate()}</Text>
-        <Text style={styles.entryDateMonth}>{new Date(item.date + 'T00:00:00').toLocaleString('default', { month: 'short' })}</Text>
-      </View>
-      <View style={styles.entryTextContainer}>
-        <Text style={styles.entryTitle} numberOfLines={1}>{item.title || `Entry - ${new Date(item.date + 'T00:00:00').toLocaleDateString()}`}</Text>
-        <Text style={styles.entryContentSnippet} numberOfLines={2}>{item.content}</Text>
-        <View style={styles.entryMetaContainer}>
-            {item.mood && item.mood !== 'none' && <Text style={styles.entryMood}>Mood: {item.mood}</Text>}
-            {item.tags && item.tags.length > 0 && <Text style={styles.entryTags} numberOfLines={1}>Tags: {item.tags.join(', ')}</Text>}
-        </View>
-      </View>
-      <TouchableOpacity onPress={() => confirmAndDeleteDiaryEntry(item.id)} style={styles.entryDeleteButton}>
-        <Text style={styles.entryDeleteButtonText}>✕</Text>
-      </TouchableOpacity>
+  const activeFilteredReminders = useMemo(() => {
+    const todayFormatted = getTodayDateStringHelper();
+    let currentlyFiltered: Reminder[];
+    switch (activeFilterOption) {
+      case 'pending': currentlyFiltered = remindersList.filter(r => !r.isCompleted); break;
+      case 'completed': currentlyFiltered = remindersList.filter(r => r.isCompleted); break;
+      case 'today': currentlyFiltered = remindersList.filter(r => r.date === todayFormatted && !r.isCompleted); break;
+      case 'all': default: currentlyFiltered = remindersList;
+    }
+    return applySortingToReminders(currentlyFiltered);
+  }, [remindersList, activeFilterOption, applySortingToReminders]);
+
+  const renderFilterOptionButton = (filterKey: FilterOption, buttonTextLabel: string) => (
+    <TouchableOpacity style={[styles.filterButton, activeFilterOption === filterKey && styles.filterButtonActive]} onPress={() => {setActiveFilterOption(filterKey);}}>
+      <Text style={[styles.filterButtonText, activeFilterOption === filterKey && styles.filterButtonTextActive]}>{buttonTextLabel}</Text>
     </TouchableOpacity>
   );
 
-  if (isLoadingData) {
-    return ( <SafeAreaView style={styles.fullScreenCenteredContainer}><ActivityIndicator size="large" color="#4A90E2" /><Text style={styles.statusText}>Loading Diary...</Text></SafeAreaView> );
+  const renderSingleReminderItem = ({ item }: { item: Reminder }) => (
+    <View style={[styles.reminderItemCard, item.isCompleted && styles.reminderItemCardCompleted]}>
+        <TouchableOpacity onPress={() => toggleReminderCompletionState(item.id)} style={styles.itemCheckboxArea}>
+            <View style={[styles.itemCheckbox, item.isCompleted && styles.itemCheckboxChecked]}>
+            {item.isCompleted && <Text style={styles.itemCheckboxMark}>✓</Text>}
+            </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.itemTextContentArea} onPress={() => openReminderCreationModal(item)}>
+            <Text style={[styles.itemTitleText, item.isCompleted && styles.itemTextCompletedEffect]}>{item.title}</Text>
+            <Text style={[styles.itemDateTimeText, item.isCompleted && styles.itemTextCompletedEffect]}>
+            {new Date(item.date + 'T' + (item.time || '00:00')).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} at {item.time}
+            </Text>
+            {item.notes && <Text style={[styles.itemNotesText, item.isCompleted && styles.itemTextCompletedEffect]} numberOfLines={2}>{item.notes}</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => confirmAndDeleteReminder(item.id)} style={styles.itemDeleteButton}>
+            <Text style={styles.itemDeleteButtonText}>🗑️</Text>
+        </TouchableOpacity>
+    </View>
+  );
+
+  if (isDataLoading) {
+    return ( <SafeAreaView style={styles.fullScreenCentered}><ActivityIndicator size="large" color="#007AFF" /><Text style={styles.informativeText}>Loading Your Reminders...</Text></SafeAreaView> );
   }
 
   return (
-    <SafeAreaView style={styles.baseScreenContainer}>
-      <Stack.Screen options={{ headerTitle: 'My Diary', headerRight: () => (<TouchableOpacity onPress={() => openModalForNewOrEditEntry()} style={styles.headerActionButton}><Text style={styles.headerActionButtonText}>New Entry</Text></TouchableOpacity>)}}/>
-      
-      <View style={styles.uselessInfoBar}>
-        <Text style={styles.uselessInfoText}>Entries: {entries.length} | Usage: {appUsageCounter} | Last Sync: {lastSyncStatus}</Text>
-        <TouchableOpacity onPress={uselessThemeToggle}><Text style={styles.uselessLinkText}>Toggle Theme (Placeholder)</Text></TouchableOpacity>
+    <SafeAreaView style={styles.baseScreenLayout}>
+      <Stack.Screen options={{ headerTitle: 'MinHub Reminders', headerRight: () => ( <View style={styles.headerActionButtonsContainer}><TouchableOpacity onPress={() => {router.push('/App_inApp/Reminders/prodReminders');}} style={styles.headerActionButton}><Text style={styles.headerActionButtonText}>Presets</Text></TouchableOpacity><TouchableOpacity onPress={() => openReminderCreationModal()} style={styles.headerActionButton}><Text style={styles.headerActionButtonText}>Add New</Text></TouchableOpacity></View> ), }} />
+      <View style={styles.filterOptionsContainer}>
+        {renderFilterOptionButton('pending', 'Pending')}
+        {renderFilterOptionButton('today', "Today's Active")}
+        {renderFilterOptionButton('completed', 'Completed')}
+        {renderFilterOptionButton('all', 'Show All')}
       </View>
-
-      {entries.length === 0 ? (
-        <View style={styles.fullScreenCenteredContentArea}>
-          <Text style={styles.statusText}>No diary entries yet.</Text>
-          <TouchableOpacity style={[styles.generalButton, styles.primaryButton]} onPress={() => openModalForNewOrEditEntry()}>
-            <Text style={styles.generalButtonText}>Create Your First Entry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={entries}
-          renderItem={renderDiaryEntryItem}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.mainEntryListContainer}
-          ItemSeparatorComponent={() => <View style={styles.entryItemSeparator}/>}
-        />
-      )}
-
-      <Modal animationType="slide" transparent={true} visible={isModalEditorOpen} onRequestClose={() => setIsModalEditorOpen(false)}>
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : undefined} 
-            style={styles.modalMainOverlayBackground}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-        >
-          <ScrollView 
-            contentContainerStyle={styles.modalScrollViewWrapper} 
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.modalInnerContentBox}>
-              <Text style={styles.modalMainTitleText}>{currentEditingEntry ? 'Edit Diary Entry' : 'New Diary Entry'}</Text>
-              
-              <Text style={styles.formFieldLabel}>Date:</Text>
-              <TouchableOpacity onPress={() => setIsDatePickerVisible(true)} style={styles.dateTimeInputButton}>
-                <Text style={styles.dateTimeInputButtonText}>{formatDateForDisplay(entryFormDateTime)}</Text>
-              </TouchableOpacity>
-              {isDatePickerVisible && ( <DateTimePicker value={entryFormDateTime} mode="date" display={Platform.OS === 'ios' ? "spinner" : "default"} onChange={handleDateChangeForModal}/> )}
-
-              <Text style={styles.formFieldLabel}>Title (Optional):</Text>
-              <TextInput style={styles.formTextInputField} placeholder="Entry Title" value={entryFormTitle} onChangeText={setEntryFormTitle} maxLength={MAX_TITLE_LENGTH} />
-              
-              <Text style={styles.formFieldLabel}>Content:</Text>
-              <TextInput style={[styles.formTextInputField, styles.contentTextAreaField]} placeholder="Write your thoughts..." value={entryFormContent} onChangeText={setEntryFormContent} multiline numberOfLines={8} maxLength={MAX_CONTENT_LENGTH}/>
-              
-              <Text style={styles.formFieldLabel}>Mood (Optional):</Text>
-              <View style={styles.moodSelectorContainer}>
-                {MOOD_OPTIONS.map(mood => (
-                  <TouchableOpacity key={mood} style={[styles.moodOptionButton, entryFormMood === mood && styles.moodOptionButtonSelected]} onPress={() => setEntryFormMood(mood)}>
-                    <Text style={[styles.moodOptionButtonText, entryFormMood === mood && styles.moodOptionButtonTextSelected]}>{mood}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.formFieldLabel}>Tags (Optional, comma-separated):</Text>
-              <TextInput style={styles.formTextInputField} placeholder="e.g., work, travel, reflection" value={entryFormTagsInput} onChangeText={setEntryFormTagsInput} />
-              
-              <Text style={styles.formFieldLabel}>Location (Optional):</Text>
-              <TextInput style={styles.formTextInputField} placeholder="e.g., Home, Paris" value={entryFormLocation} onChangeText={setEntryFormLocation} />
-
-              <View style={styles.modalActionButtonsContainer}>
-                <TouchableOpacity style={[styles.generalModalButton, styles.modalSecondaryButton]} onPress={() => setIsModalEditorOpen(false)}><Text style={styles.modalSecondaryButtonText}>Cancel</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.generalModalButton, styles.modalPrimaryButton]} onPress={processAndSaveDiaryEntry}><Text style={styles.modalPrimaryButtonText}>{currentEditingEntry ? 'Save Changes' : 'Add Entry'}</Text></TouchableOpacity>
-              </View>
+      {activeFilteredReminders.length === 0 ? ( <View style={styles.fullScreenCenteredContent}><Text style={styles.informativeText}>{activeFilterOption === 'pending' ? 'No pending reminders. Good job!' : activeFilterOption === 'today' ? 'No active reminders for today.' : activeFilterOption === 'completed' ? 'No reminders completed yet.' : 'No reminders found. Add one or choose a preset!'}</Text></View>
+      ) : ( <FlatList data={activeFilteredReminders} renderItem={renderSingleReminderItem} keyExtractor={item => item.id.toString()} contentContainerStyle={styles.mainListContainer}/> )}
+      <Modal animationType="slide" transparent={true} visible={isModalEditorVisible} onRequestClose={() => setIsModalEditorVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalMainOverlay} keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}>
+          <ScrollView contentContainerStyle={styles.modalScrollViewContent} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalInnerContentContainer}>
+              <Text style={styles.modalMainTitle}>{currentEditingReminder ? 'Edit This Reminder' : 'Create New Reminder'}</Text>
+              <TextInput style={styles.modalFormField} placeholder="Reminder Title (e.g., Call John)" value={reminderFormTitle} onChangeText={setReminderFormTitle} autoFocus={!currentEditingReminder}/>
+              <TouchableOpacity onPress={() => {setIsDatePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Date: {convertDateToStorageFormatHelper(reminderFormDateTime)}</Text></TouchableOpacity>
+              {isDatePickerVisible && ( <DateTimePicker value={reminderFormDateTime} mode="date" display={Platform.OS === 'ios' ? 'spinner': 'default'} onChange={handleDateChangeFromPicker}/> )}
+              <TouchableOpacity onPress={() => {setIsTimePickerVisible(true);}} style={styles.dateTimeSelectorButton}><Text style={styles.dateTimeSelectorButtonText}>Time: {convertTimeToStorageFormatHelper(reminderFormDateTime)}</Text></TouchableOpacity>
+              {isTimePickerVisible && ( <DateTimePicker value={reminderFormDateTime} mode="time" display={Platform.OS === 'ios' ? 'spinner': 'default'} is24Hour={true} onChange={handleTimeChangeFromPicker}/> )}
+              <TextInput style={[styles.modalFormField, styles.textAreaField]} placeholder="Additional Notes (Optional)" value={reminderFormNotes} onChangeText={setReminderFormNotes} multiline numberOfLines={4}/>
+              <View style={styles.modalActionButtonsRow}><TouchableOpacity style={[styles.genericModalButton, styles.modalCancelButton]} onPress={() => {setIsModalEditorVisible(false);}}><Text style={styles.modalButtonTextContent}>Cancel</Text></TouchableOpacity><TouchableOpacity style={[styles.genericModalButton, styles.modalSaveButton]} onPress={processAndSaveReminder}><Text style={styles.modalButtonTextContent}>{currentEditingReminder ? 'Save Changes' : 'Add Reminder'}</Text></TouchableOpacity></View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -340,50 +424,43 @@ export default function DiaryScreen() {
 }
 
 const styles = StyleSheet.create({
-  baseScreenContainer: { flex: 1, backgroundColor: '#F4F7FA' },
-  headerActionButton: { marginRight: 15, paddingVertical: 5, paddingHorizontal: 8 },
-  headerActionButtonText: { color: Platform.OS === 'ios' ? '#007AFF' : '#1A202C', fontSize: 17, fontWeight: '500' },
-  fullScreenCenteredContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#F4F7FA' },
-  fullScreenCenteredContentArea: { flex:1, justifyContent: 'center', alignItems: 'center', padding: 20, marginTop: 0},
-  statusText: { fontSize: 16, color: '#6B7280', marginTop: 10, textAlign: 'center' },
-  mainEntryListContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20 },
-  entryItemContainer: { backgroundColor: '#FFFFFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, marginBottom: 16, flexDirection: 'row', elevation: 2, shadowColor: '#BCCCDC', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderWidth: 1, borderColor: '#E2E8F0'},
-  entryDateBadge: { alignItems: 'center', justifyContent: 'center', marginRight: 15, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#EDF2F7', borderRadius: 8 },
-  entryDateDay: { fontSize: 20, fontWeight: 'bold', color: '#2D3748'},
-  entryDateMonth: { fontSize: 12, color: '#4A5568', textTransform: 'uppercase'},
-  entryTextContainer: { flex: 1 },
-  entryTitle: { fontSize: 17, fontWeight: '600', color: '#1A202C', marginBottom: 4 },
-  entryContentSnippet: { fontSize: 14, color: '#4A5568', lineHeight: 20, marginBottom: 6 },
-  entryMetaContainer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4 },
-  entryMood: { fontSize: 12, color: '#2B6CB0', backgroundColor: '#EBF4FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8, marginBottom: 4 },
-  entryTags: { fontSize: 12, color: '#2F855A', backgroundColor: '#F0FFF4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 4 },
-  entryDeleteButton: { paddingLeft: 10, justifyContent: 'center' },
-  entryDeleteButtonText: { fontSize: Platform.OS === 'ios' ? 20 : 18, color: '#E53E3E' },
-  entryItemSeparator: { height: 0 },
-  generalButton: { paddingVertical: 12, paddingHorizontal: 25, borderRadius: 8, alignItems: 'center', marginVertical: 10},
-  primaryButton: { backgroundColor: '#4299E1'},
-  generalButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  modalMainOverlayBackground: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 15 },
-  modalScrollViewWrapper: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', width: '100%', paddingVertical: 20 },
-  modalInnerContentBox: { backgroundColor: '#FFFFFF', padding: 25, borderRadius: 16, width: '100%', maxWidth: 500, maxHeight: '95%', elevation: 10, shadowColor: '#000000', shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.25, shadowRadius: 20},
-  modalMainTitleText: { fontSize: 22, fontWeight: '700', marginBottom: 25, color: '#1A202C', textAlign: 'center' },
-  formFieldLabel: { fontSize: 14, fontWeight: '500', color: '#4A5568', marginBottom: 6, marginLeft: 2 },
-  formTextInputField: { borderWidth: 1, borderColor: '#CBD5E0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 12 : 10, fontSize: 16, marginBottom: 18, backgroundColor: '#FDFDFE', color: '#2D3748' },
-  contentTextAreaField: { minHeight: 120, textAlignVertical: 'top', paddingTop: 12 },
-  dateTimeInputButton: { borderWidth: 1, borderColor: '#CBD5E0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 18, backgroundColor: '#FDFDFE', alignItems: 'flex-start' },
-  dateTimeInputButtonText: { fontSize: 16, color: '#2D3748' },
-  moodSelectorContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginBottom: 18 },
-  moodOptionButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#CBD5E0', marginRight: 8, marginBottom: 8, backgroundColor: '#F7FAFC' },
-  moodOptionButtonSelected: { backgroundColor: '#4299E1', borderColor: '#2B6CB0' },
-  moodOptionButtonText: { fontSize: 14, color: '#4A5568' },
-  moodOptionButtonTextSelected: { color: '#FFFFFF', fontWeight: '500' },
-  modalActionButtonsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
-  generalModalButton: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, flex: 1, alignItems: 'center', marginHorizontal: 6 },
-  modalSecondaryButton: { backgroundColor: '#E2E8F0' },
-  modalPrimaryButton: { backgroundColor: '#3182CE' },
-  modalSecondaryButtonText: { color: '#2D3748', fontSize: 16, fontWeight: '600' },
-  modalPrimaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  uselessInfoBar: {padding: 10, backgroundColor: '#E2E8F0', borderBottomWidth: 1, borderColor: '#CBD5E0'},
-  uselessInfoText: {fontSize: 10, color: '#718096', textAlign: 'center'},
-  uselessLinkText: {fontSize: 10, color: '#3182CE', textAlign: 'center', marginTop: 3}
+  baseScreenLayout: { flex: 1, backgroundColor: '#F7FAFC' },
+  headerActionButtonsContainer: { flexDirection: 'row' },
+  headerActionButton: { marginHorizontal: 10, paddingVertical: 5 },
+  headerActionButtonText: { color: Platform.OS === 'ios' ? '#007AFF' : '#1F2937', fontSize: 17, fontWeight: '500' },
+  filterOptionsContainer: { flexDirection: 'row', justifyContent: 'space-evenly', paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' },
+  filterButton: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1.5, borderColor: '#4A5568' },
+  filterButtonActive: { backgroundColor: '#4A5568', borderColor: '#2D3748' },
+  filterButtonText: { color: '#4A5568', fontSize: 13, fontWeight: '500' },
+  filterButtonTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  fullScreenCentered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#F7FAFC' },
+  fullScreenCenteredContent: { flex:1, justifyContent: 'center', alignItems: 'center', padding: 20, marginTop: 0},
+  informativeText: { fontSize: 16, color: '#718096', marginTop: 10, textAlign: 'center' },
+  mainListContainer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20 },
+  reminderItemCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 10, marginBottom: 14, flexDirection: 'row', alignItems: 'center', elevation: 2, shadowColor: '#CBD5E0', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3 },
+  reminderItemCardCompleted: { backgroundColor: '#E2E8F0', opacity: 0.6 },
+  itemCheckboxArea: { padding: 8, marginRight: 12 },
+  itemCheckbox: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#4299E1', justifyContent: 'center', alignItems: 'center' },
+  itemCheckboxChecked: { backgroundColor: '#4299E1' },
+  itemCheckboxMark: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
+  itemTextContentArea: { flex: 1 },
+  itemTitleText: { fontSize: 17, fontWeight: '600', color: '#2D3748', marginBottom: 2 },
+  itemDateTimeText: { fontSize: 13, color: '#718096', marginBottom: 4 },
+  itemNotesText: { fontSize: 13, color: '#A0AEC0', fontStyle: 'italic' },
+  itemTextCompletedEffect: { textDecorationLine: 'line-through', color: '#718096' },
+  itemDeleteButton: { padding: 10, marginLeft: 10 },
+  itemDeleteButtonText: { fontSize: Platform.OS === 'ios' ? 24 : 20, color: '#EF4444' },
+  modalMainOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalScrollViewContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  modalInnerContentContainer: { backgroundColor: '#FFFFFF', padding: 25, borderRadius: 16, width: '92%', maxWidth: 480, elevation: 10, shadowColor: '#000000', shadowOffset: {width: 0, height: 5}, shadowOpacity: 0.2, shadowRadius: 15},
+  modalMainTitle: { fontSize: 22, fontWeight: '700', marginBottom: 25, color: '#111827', textAlign: 'center' },
+  modalFormField: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 16, paddingVertical: Platform.OS === 'ios' ? 14 : 12, fontSize: 16, marginBottom: 20, backgroundColor: '#F9FAFB', color: '#111827' },
+  dateTimeSelectorButton: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, backgroundColor: '#F9FAFB', alignItems: 'flex-start' },
+  dateTimeSelectorButtonText: { fontSize: 16, color: '#111827' },
+  textAreaField: { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 },
+  modalActionButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 },
+  genericModalButton: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, flex: 1, alignItems: 'center', marginHorizontal: 6 },
+  modalCancelButton: { backgroundColor: '#E5E7EB' },
+  modalSaveButton: { backgroundColor: '#4F46E5' },
+  modalButtonTextContent: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });
