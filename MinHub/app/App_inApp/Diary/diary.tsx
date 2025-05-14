@@ -11,13 +11,14 @@ import {
   Platform,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
+  StyleProp,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View, // Importa StyleProp
+  ViewStyle // Importa ViewStyle
 } from 'react-native';
-import './diaryCSS.css';
+import { generateInkBlots, inkBlotStyle, paperStyles } from './diaryStyles';
 
 type Mood = 'happy' | 'sad' | 'neutral' | 'excited' | 'calm' | 'stressed' | 'grateful' | 'reflective' | 'none';
 type DayRating = 1 | 2 | 3 | 4 | 5;
@@ -31,18 +32,18 @@ const SLEEP_QUALITIES: SleepQuality[] = ['good', 'average', 'poor'];
 
 interface DiaryEntry {
   id: string;
-  date: string; 
-  title: string; 
+  date: string;
+  title: string;
   content: string;
   mood?: Mood;
   dayRating?: DayRating;
   energyLevel?: EnergyLevel;
   sleepQuality?: SleepQuality;
   tags?: string[];
-  location?: string; 
+  location?: string;
   createdAt: string;
   updatedAt: string;
-  wordCount: number; 
+  wordCount: number;
   characterCount: number;
   isFavorite: boolean;
   weather?: string;
@@ -60,7 +61,7 @@ const MAX_GOALS = 3;
 const MAX_CHALLENGES = 3;
 
 export default function DiaryScreen() {
-  const router = useRouter(); 
+  const router = useRouter();
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [isModalEditorOpen, setIsModalEditorOpen] = useState(false);
@@ -73,7 +74,7 @@ export default function DiaryScreen() {
   const [entryFormDayRating, setEntryFormDayRating] = useState<DayRating | null>(null);
   const [entryFormEnergyLevel, setEntryFormEnergyLevel] = useState<EnergyLevel | null>(null);
   const [entryFormSleepQuality, setEntryFormSleepQuality] = useState<SleepQuality | null>(null);
-  const [entryFormTagsInput, setEntryFormTagsInput] = useState<string>(''); 
+  const [entryFormTagsInput, setEntryFormTagsInput] = useState<string>('');
   const [entryFormLocation, setEntryFormLocation] = useState<string>('');
   const [entryFormGoalsInput, setEntryFormGoalsInput] = useState<string>('');
   const [entryFormChallengesInput, setEntryFormChallengesInput] = useState<string>('');
@@ -111,10 +112,10 @@ export default function DiaryScreen() {
     const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
     return { words: wordCount, chars: charCount };
   };
-  
+
   const sortDiaryEntriesChronologically = useCallback((entriesArray: DiaryEntry[]): DiaryEntry[] => {
-    return [...entriesArray].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime() || 
+    return [...entriesArray].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime() ||
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }, []);
@@ -133,7 +134,7 @@ export default function DiaryScreen() {
     } finally {
       setIsLoadingData(false);
     }
-  }, []);
+  }, [recordScreenUsage, sortDiaryEntriesChronologically]);
 
   useFocusEffect(
     useCallback(() => {
@@ -184,7 +185,7 @@ export default function DiaryScreen() {
       setEntryFormChallengesInput('');
     }
     setIsModalEditorOpen(true);
-    recordScreenUsage(); 
+    recordScreenUsage();
   };
 
   const processAndSaveDiaryEntry = async () => {
@@ -258,7 +259,7 @@ export default function DiaryScreen() {
   };
 
   const toggleFavoriteStatus = async (entryId: string) => {
-    const updatedEntries = entries.map(entry => 
+    const updatedEntries = entries.map(entry =>
       entry.id === entryId ? { ...entry, isFavorite: !entry.isFavorite } : entry
     );
     await persistDiaryEntriesToStorage(updatedEntries);
@@ -273,30 +274,31 @@ export default function DiaryScreen() {
   };
 
   const renderDiaryEntryItem = ({ item }: { item: DiaryEntry }) => (
-    <TouchableOpacity style={styles.entryItemContainer} onPress={() => openModalForNewOrEditEntry(item)}>
-      <View style={styles.entryDateBadge}>
-        <Text style={styles.entryDateDay}>{new Date(item.date + 'T00:00:00').getDate()}</Text>
-        <Text style={styles.entryDateMonth}>{new Date(item.date + 'T00:00:00').toLocaleString('default', { month: 'short' })}</Text>
+    <TouchableOpacity style={paperStyles.entryContainer} onPress={() => openModalForNewOrEditEntry(item)}>
+      <View style={paperStyles.entryDateBadge}>
+        <Text style={paperStyles.entryDateDay}>{new Date(item.date + 'T00:00:00').getDate()}</Text>
+        <Text style={paperStyles.entryDateMonth}>{new Date(item.date + 'T00:00:00').toLocaleString('default', { month: 'short' })}</Text>
       </View>
-      <View style={styles.entryTextContainer}>
-        <View style={styles.entryHeader}>
-          <Text style={styles.entryTitle} numberOfLines={1}>{item.title || `Entry - ${new Date(item.date + 'T00:00:00').toLocaleDateString()}`}</Text>
-          {item.isFavorite && <Text style={styles.favoriteIcon}>★</Text>}
+      <View style={paperStyles.entryTextContainer}>
+        <View style={paperStyles.entryHeader}>
+          <Text style={paperStyles.entryTitle} numberOfLines={1}>
+            {item.title || `Entry - ${new Date(item.date + 'T00:00:00').toLocaleDateString()}`}
+          </Text>
+          {item.isFavorite && <Text style={paperStyles.favoriteIcon}>★</Text>}
         </View>
-        <Text style={styles.entryContentSnippet} numberOfLines={2}>{item.content}</Text>
-        <View style={styles.entryMetaContainer}>
-          {item.dayRating && <Text style={styles.entryRating}>{RATING_EMOJIS[item.dayRating - 1]}</Text>}
-          {item.mood && item.mood !== 'none' && <Text style={styles.entryMood}>{item.mood}</Text>}
-          {item.energyLevel && <Text style={styles.entryEnergy}>Energy: {item.energyLevel}</Text>}
-          {item.tags && item.tags.length > 0 && <Text style={styles.entryTags} numberOfLines={1}>Tags: {item.tags.join(', ')}</Text>}
+        <Text style={paperStyles.entryContent} numberOfLines={2}>{item.content}</Text>
+        <View style={paperStyles.entryMetaContainer}>
+          {item.dayRating && <Text style={paperStyles.entryRating}>{RATING_EMOJIS[item.dayRating - 1]}</Text>}
+          {item.mood && item.mood !== 'none' && <Text style={paperStyles.entryMood}>{item.mood}</Text>}
+          {item.tags && item.tags.length > 0 && <Text style={paperStyles.entryTags}>Tags: {item.tags.join(', ')}</Text>}
         </View>
       </View>
-      <View style={styles.entryActions}>
-        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFavoriteStatus(item.id); }} style={styles.entryFavoriteButton}>
-          <Text style={item.isFavorite ? styles.entryFavoriteButtonTextActive : styles.entryFavoriteButtonText}>★</Text>
+      <View style={paperStyles.entryActions}>
+        <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFavoriteStatus(item.id); }}>
+          <Text style={item.isFavorite ? paperStyles.favoriteIconActive : paperStyles.favoriteIcon}>★</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={(e) => { e.stopPropagation(); confirmAndDeleteDiaryEntry(item.id); }} style={styles.entryDeleteButton}>
-          <Text style={styles.entryDeleteButtonText}>✕</Text>
+        <TouchableOpacity onPress={(e) => { e.stopPropagation(); confirmAndDeleteDiaryEntry(item.id); }}>
+          <Text style={paperStyles.deleteIcon}>✕</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -304,33 +306,39 @@ export default function DiaryScreen() {
 
   if (isLoadingData) {
     return (
-      <SafeAreaView style={styles.fullScreenCenteredContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.statusText}>Loading Diary...</Text>
+      <SafeAreaView style={paperStyles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8b7355" />
+        <Text style={paperStyles.loadingText}>Loading Diary...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.baseScreenContainer}>
-      <Stack.Screen options={{ 
-        headerTitle: 'My Diary', 
+    <SafeAreaView style={paperStyles.container}>
+      {generateInkBlots().map(blot => (
+        <View key={blot.id} style={inkBlotStyle(blot) as StyleProp<ViewStyle>} />
+      ))}
+
+      <Stack.Screen options={{
+        headerTitle: 'My Diary',
+        headerStyle: paperStyles.header,
+        headerTitleStyle: paperStyles.headerTitle,
         headerRight: () => (
-          <TouchableOpacity onPress={() => openModalForNewOrEditEntry()} style={styles.headerActionButton}>
-            <Text style={styles.headerActionButtonText}>New Entry</Text>
+          <TouchableOpacity onPress={() => openModalForNewOrEditEntry()} style={paperStyles.headerButton}>
+            <Text style={paperStyles.headerButtonText}>New Entry</Text>
           </TouchableOpacity>
         )
       }}/>
-      
-      <View style={styles.infoBar}>
-        <Text style={styles.infoText}>Entries: {entries.length} | Last Sync: {lastSyncStatus}</Text>
+
+      <View style={paperStyles.infoBar}>
+        <Text style={paperStyles.infoText}>Entries: {entries.length} | Last Sync: {lastSyncStatus}</Text>
       </View>
 
       {entries.length === 0 ? (
-        <View style={styles.fullScreenCenteredContentArea}>
-          <Text style={styles.statusText}>No diary entries yet.</Text>
-          <TouchableOpacity style={[styles.generalButton, styles.primaryButton]} onPress={() => openModalForNewOrEditEntry()}>
-            <Text style={styles.generalButtonText}>Create Your First Entry</Text>
+        <View style={paperStyles.emptyStateContainer}>
+          <Text style={paperStyles.emptyStateText}>No diary entries yet.</Text>
+          <TouchableOpacity style={paperStyles.primaryButton} onPress={() => openModalForNewOrEditEntry()}>
+            <Text style={paperStyles.buttonText}>Create Your First Entry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -338,88 +346,88 @@ export default function DiaryScreen() {
           data={entries}
           renderItem={renderDiaryEntryItem}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.mainEntryListContainer}
-          ItemSeparatorComponent={() => <View style={styles.entryItemSeparator}/>}
+          contentContainerStyle={paperStyles.listContainer}
+          ItemSeparatorComponent={() => <View style={paperStyles.separator} />}
         />
       )}
 
       <Modal animationType="slide" transparent={true} visible={isModalEditorOpen} onRequestClose={() => setIsModalEditorOpen(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"} 
-          style={styles.modalMainOverlayBackground}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={paperStyles.modalOverlay}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
         >
-          <ScrollView 
-            contentContainerStyle={styles.modalScrollViewWrapper} 
+          <ScrollView
+            contentContainerStyle={paperStyles.modalScrollView}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.modalInnerContentBox}>
-              <Text style={styles.modalMainTitleText}>{currentEditingEntry ? 'Edit Diary Entry' : 'New Diary Entry'}</Text>
-              
-              <Text style={styles.formFieldLabel}>Date:</Text>
-              <TouchableOpacity onPress={() => setIsDatePickerVisible(true)} style={styles.dateTimeInputButton}>
-                <Text style={styles.dateTimeInputButtonText}>{formatDateForDisplay(entryFormDateTime)}</Text>
+            <View style={paperStyles.modalContent}>
+              <Text style={paperStyles.modalTitle}>{currentEditingEntry ? 'Edit Diary Entry' : 'New Diary Entry'}</Text>
+
+              <Text style={paperStyles.formLabel}>Date:</Text>
+              <TouchableOpacity onPress={() => setIsDatePickerVisible(true)} style={paperStyles.formDateButton}>
+                <Text style={paperStyles.formDateButtonText}>{formatDateForDisplay(entryFormDateTime)}</Text>
               </TouchableOpacity>
               {isDatePickerVisible && (
-                <DateTimePicker 
-                  value={entryFormDateTime} 
-                  mode="date" 
-                  display={Platform.OS === 'ios' ? "spinner" : "default"} 
+                <DateTimePicker
+                  value={entryFormDateTime}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? "spinner" : "default"}
                   onChange={handleDateChangeForModal}
                 />
               )}
 
-              <Text style={styles.formFieldLabel}>Title (Optional):</Text>
-              <TextInput 
-                style={styles.formTextInputField} 
-                placeholder="Entry Title" 
-                value={entryFormTitle} 
-                onChangeText={setEntryFormTitle} 
-                maxLength={MAX_TITLE_LENGTH} 
+              <Text style={paperStyles.formLabel}>Title (Optional):</Text>
+              <TextInput
+                style={paperStyles.formInput}
+                placeholder="Entry Title"
+                value={entryFormTitle}
+                onChangeText={setEntryFormTitle}
+                maxLength={MAX_TITLE_LENGTH}
               />
-              
-              <Text style={styles.formFieldLabel}>Content:</Text>
-              <TextInput 
-                style={[styles.formTextInputField, styles.contentTextAreaField]} 
-                placeholder="Write your thoughts..." 
-                value={entryFormContent} 
-                onChangeText={setEntryFormContent} 
-                multiline 
-                numberOfLines={8} 
+
+              <Text style={paperStyles.formLabel}>Content:</Text>
+              <TextInput
+                style={[paperStyles.formInput, paperStyles.formTextArea]}
+                placeholder="Write your thoughts..."
+                value={entryFormContent}
+                onChangeText={setEntryFormContent}
+                multiline
+                numberOfLines={8}
                 maxLength={MAX_CONTENT_LENGTH}
               />
-              
-              <Text style={styles.formFieldLabel}>How was your day?</Text>
-              <View style={styles.ratingContainer}>
+
+              <Text style={paperStyles.formLabel}>How was your day?</Text>
+              <View style={paperStyles.optionsRowContainer}>
                 {RATING_EMOJIS.map((emoji, index) => (
-                  <TouchableOpacity 
-                    key={index} 
+                  <TouchableOpacity
+                    key={index}
                     style={[
-                      styles.ratingOptionButton, 
-                      entryFormDayRating === index + 1 && styles.ratingOptionButtonSelected
-                    ]} 
+                      paperStyles.optionButton,
+                      entryFormDayRating === index + 1 && paperStyles.optionButtonSelected
+                    ]}
                     onPress={() => setEntryFormDayRating((index + 1) as DayRating)}
                   >
-                    <Text style={styles.ratingOptionButtonText}>{emoji}</Text>
+                    <Text style={[paperStyles.optionButtonText, paperStyles.ratingEmoji]}>{emoji}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.formFieldLabel}>Mood:</Text>
-              <View style={styles.moodSelectorContainer}>
+              <Text style={paperStyles.formLabel}>Mood:</Text>
+              <View style={paperStyles.optionsWrapContainer}>
                 {MOOD_OPTIONS.map(mood => (
-                  <TouchableOpacity 
-                    key={mood} 
+                  <TouchableOpacity
+                    key={mood}
                     style={[
-                      styles.moodOptionButton, 
-                      entryFormMood === mood && styles.moodOptionButtonSelected
-                    ]} 
+                      paperStyles.optionButton,
+                      entryFormMood === mood && paperStyles.optionButtonSelected
+                    ]}
                     onPress={() => setEntryFormMood(mood)}
                   >
                     <Text style={[
-                      styles.moodOptionButtonText, 
-                      entryFormMood === mood && styles.moodOptionButtonTextSelected
+                      paperStyles.optionButtonText,
+                      entryFormMood === mood && paperStyles.optionButtonTextSelected
                     ]}>
                       {mood}
                     </Text>
@@ -427,20 +435,20 @@ export default function DiaryScreen() {
                 ))}
               </View>
 
-              <Text style={styles.formFieldLabel}>Energy Level:</Text>
-              <View style={styles.energyLevelContainer}>
+              <Text style={paperStyles.formLabel}>Energy Level:</Text>
+              <View style={paperStyles.optionsRowContainer}>
                 {ENERGY_LEVELS.map(level => (
                   <TouchableOpacity
                     key={level}
                     style={[
-                      styles.energyLevelButton,
-                      entryFormEnergyLevel === level && styles.energyLevelButtonSelected
+                      paperStyles.optionButton, {flex:1, marginHorizontal: 2},
+                      entryFormEnergyLevel === level && paperStyles.optionButtonSelected
                     ]}
                     onPress={() => setEntryFormEnergyLevel(level)}
                   >
                     <Text style={[
-                      styles.energyLevelButtonText,
-                      entryFormEnergyLevel === level && styles.energyLevelButtonTextSelected
+                      paperStyles.optionButtonText,
+                      entryFormEnergyLevel === level && paperStyles.optionButtonTextSelected
                     ]}>
                       {level}
                     </Text>
@@ -448,20 +456,20 @@ export default function DiaryScreen() {
                 ))}
               </View>
 
-              <Text style={styles.formFieldLabel}>Sleep Quality:</Text>
-              <View style={styles.sleepQualityContainer}>
+              <Text style={paperStyles.formLabel}>Sleep Quality:</Text>
+              <View style={paperStyles.optionsRowContainer}>
                 {SLEEP_QUALITIES.map(quality => (
                   <TouchableOpacity
                     key={quality}
                     style={[
-                      styles.sleepQualityButton,
-                      entryFormSleepQuality === quality && styles.sleepQualityButtonSelected
+                      paperStyles.optionButton, {flex:1, marginHorizontal: 2},
+                      entryFormSleepQuality === quality && paperStyles.optionButtonSelected
                     ]}
                     onPress={() => setEntryFormSleepQuality(quality)}
                   >
                     <Text style={[
-                      styles.sleepQualityButtonText,
-                      entryFormSleepQuality === quality && styles.sleepQualityButtonTextSelected
+                      paperStyles.optionButtonText,
+                      entryFormSleepQuality === quality && paperStyles.optionButtonTextSelected
                     ]}>
                       {quality}
                     </Text>
@@ -469,50 +477,50 @@ export default function DiaryScreen() {
                 ))}
               </View>
 
-              <Text style={styles.formFieldLabel}>Goals Achieved (Optional, comma-separated):</Text>
-              <TextInput 
-                style={styles.formTextInputField} 
-                placeholder="e.g., Exercise, Read, Meditate" 
-                value={entryFormGoalsInput} 
-                onChangeText={setEntryFormGoalsInput} 
-              />
-              
-              <Text style={styles.formFieldLabel}>Challenges Faced (Optional, comma-separated):</Text>
-              <TextInput 
-                style={styles.formTextInputField} 
-                placeholder="e.g., Work stress, Missed workout" 
-                value={entryFormChallengesInput} 
-                onChangeText={setEntryFormChallengesInput} 
-              />
-              
-              <Text style={styles.formFieldLabel}>Tags (Optional, comma-separated):</Text>
-              <TextInput 
-                style={styles.formTextInputField} 
-                placeholder="e.g., work, travel, reflection" 
-                value={entryFormTagsInput} 
-                onChangeText={setEntryFormTagsInput} 
-              />
-              
-              <Text style={styles.formFieldLabel}>Location (Optional):</Text>
-              <TextInput 
-                style={styles.formTextInputField} 
-                placeholder="e.g., Home, Paris" 
-                value={entryFormLocation} 
-                onChangeText={setEntryFormLocation} 
+              <Text style={paperStyles.formLabel}>Goals Achieved (Optional, comma-separated):</Text>
+              <TextInput
+                style={paperStyles.formInput}
+                placeholder="e.g., Exercise, Read, Meditate"
+                value={entryFormGoalsInput}
+                onChangeText={setEntryFormGoalsInput}
               />
 
-              <View style={styles.modalActionButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.generalModalButton, styles.modalSecondaryButton]} 
+              <Text style={paperStyles.formLabel}>Challenges Faced (Optional, comma-separated):</Text>
+              <TextInput
+                style={paperStyles.formInput}
+                placeholder="e.g., Work stress, Missed workout"
+                value={entryFormChallengesInput}
+                onChangeText={setEntryFormChallengesInput}
+              />
+
+              <Text style={paperStyles.formLabel}>Tags (Optional, comma-separated):</Text>
+              <TextInput
+                style={paperStyles.formInput}
+                placeholder="e.g., work, travel, reflection"
+                value={entryFormTagsInput}
+                onChangeText={setEntryFormTagsInput}
+              />
+
+              <Text style={paperStyles.formLabel}>Location (Optional):</Text>
+              <TextInput
+                style={paperStyles.formInput}
+                placeholder="e.g., Home, Paris"
+                value={entryFormLocation}
+                onChangeText={setEntryFormLocation}
+              />
+
+              <View style={paperStyles.modalActions}>
+                <TouchableOpacity
+                  style={[paperStyles.modalButtonBase, paperStyles.modalSecondaryButton]}
                   onPress={() => setIsModalEditorOpen(false)}
                 >
-                  <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
+                  <Text style={paperStyles.modalSecondaryButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.generalModalButton, styles.modalPrimaryButton]} 
+                <TouchableOpacity
+                  style={[paperStyles.modalButtonBase, paperStyles.primaryButton]}
                   onPress={processAndSaveDiaryEntry}
                 >
-                  <Text style={styles.modalPrimaryButtonText}>{currentEditingEntry ? 'Save Changes' : 'Add Entry'}</Text>
+                  <Text style={paperStyles.buttonText}>{currentEditingEntry ? 'Save Changes' : 'Add Entry'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -522,396 +530,3 @@ export default function DiaryScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  baseScreenContainer: { 
-    flex: 1, 
-    backgroundColor: '#F4F7FA',
-    paddingHorizontal: 12,
-    marginHorizontal: 4
-  },
-  headerActionButton: { 
-    marginRight: 12, 
-    paddingVertical: 4, 
-    paddingHorizontal: 8 
-  },
-  headerActionButtonText: { 
-    color: Platform.OS === 'ios' ? '#007AFF' : '#1A202C', 
-    fontSize: 16, 
-    fontWeight: '500' 
-  },
-  fullScreenCenteredContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 16, 
-    backgroundColor: '#F4F7FA' 
-  },
-  fullScreenCenteredContentArea: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 16
-  },
-  statusText: { 
-    fontSize: 16, 
-    color: '#6B7280', 
-    marginTop: 8, 
-    textAlign: 'center' 
-  },
-  infoBar: {
-    padding: 8, 
-    backgroundColor: '#E2E8F0', 
-    borderBottomWidth: 1, 
-    borderColor: '#CBD5E0'
-  },
-  infoText: {
-    fontSize: 12, 
-    color: '#718096', 
-    textAlign: 'center'
-  },
-  mainEntryListContainer: { 
-    paddingHorizontal: 8, 
-    paddingTop: 8, 
-    paddingBottom: 16 
-  },
-  entryItemContainer: { 
-    backgroundColor: '#FFFFFF', 
-    paddingVertical: 12, 
-    paddingHorizontal: 12, 
-    borderRadius: 12, 
-    marginBottom: 12, 
-    flexDirection: 'row', 
-    elevation: 2, 
-    shadowColor: '#BCCCDC', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    borderWidth: 1, 
-    borderColor: '#E2E8F0',
-    marginHorizontal: 4
-  },
-  entryDateBadge: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginRight: 12, 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    backgroundColor: '#EDF2F7', 
-    borderRadius: 8 
-  },
-  entryDateDay: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#2D3748'
-  },
-  entryDateMonth: { 
-    fontSize: 12, 
-    color: '#4A5568', 
-    textTransform: 'uppercase'
-  },
-  entryTextContainer: { 
-    flex: 1,
-    marginRight: 8
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4
-  },
-  entryTitle: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    color: '#1A202C',
-    flex: 1
-  },
-  favoriteIcon: {
-    color: '#F6AD55',
-    fontSize: 16,
-    marginLeft: 4
-  },
-  entryContentSnippet: { 
-    fontSize: 14, 
-    color: '#4A5568', 
-    lineHeight: 20, 
-    marginBottom: 6 
-  },
-  entryMetaContainer: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    alignItems: 'center', 
-    marginTop: 4 
-  },
-  entryRating: {
-    fontSize: 16,
-    marginRight: 8
-  },
-  entryMood: { 
-    fontSize: 12, 
-    color: '#2B6CB0', 
-    backgroundColor: '#EBF4FF', 
-    paddingHorizontal: 6, 
-    paddingVertical: 2, 
-    borderRadius: 4, 
-    marginRight: 8, 
-    marginBottom: 4 
-  },
-  entryEnergy: {
-    fontSize: 12, 
-    color: '#9F7AEA', 
-    backgroundColor: '#FAF5FF', 
-    paddingHorizontal: 6, 
-    paddingVertical: 2, 
-    borderRadius: 4, 
-    marginRight: 8, 
-    marginBottom: 4 
-  },
-  entryTags: { 
-    fontSize: 12, 
-    color: '#2F855A', 
-    backgroundColor: '#F0FFF4', 
-    paddingHorizontal: 6, 
-    paddingVertical: 2, 
-    borderRadius: 4, 
-    marginBottom: 4 
-  },
-  entryActions: {
-    justifyContent: 'space-between'
-  },
-  entryFavoriteButton: {
-    paddingBottom: 8
-  },
-  entryFavoriteButtonText: {
-    fontSize: 18,
-    color: '#CBD5E0'
-  },
-  entryFavoriteButtonTextActive: {
-    fontSize: 18,
-    color: '#F6AD55'
-  },
-  entryDeleteButton: { 
-    justifyContent: 'center' 
-  },
-  entryDeleteButtonText: { 
-    fontSize: 18, 
-    color: '#E53E3E' 
-  },
-  entryItemSeparator: { 
-    height: 0 
-  },
-  generalButton: { 
-    paddingVertical: 12, 
-    paddingHorizontal: 24, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    marginVertical: 8
-  },
-  primaryButton: { 
-    backgroundColor: '#4299E1'
-  },
-  generalButtonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: '600' 
-  },
-  modalMainOverlayBackground: { 
-    flex: 1, 
-    backgroundColor: 'rgba(17, 24, 39, 0.7)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    paddingHorizontal: 8 
-  },
-  modalScrollViewWrapper: { 
-    flexGrow: 1, 
-    justifyContent: 'center', 
-    width: '100%', 
-    paddingVertical: 16 
-  },
-  modalInnerContentBox: { 
-    backgroundColor: '#FFFFFF', 
-    padding: 20, 
-    borderRadius: 16, 
-    width: '100%', 
-    maxWidth: 500, 
-    elevation: 10, 
-    shadowColor: '#000000', 
-    shadowOffset: {width: 0, height: 6}, 
-    shadowOpacity: 0.25, 
-    shadowRadius: 20,
-    marginHorizontal: 4
-  },
-  modalMainTitleText: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    marginBottom: 20, 
-    color: '#1A202C', 
-    textAlign: 'center' 
-  },
-  formFieldLabel: { 
-    fontSize: 14, 
-    fontWeight: '500', 
-    color: '#4A5568', 
-    marginBottom: 6, 
-    marginLeft: 2 
-  },
-  formTextInputField: { 
-    borderWidth: 1, 
-    borderColor: '#CBD5E0', 
-    borderRadius: 8, 
-    paddingHorizontal: 12, 
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8, 
-    fontSize: 16, 
-    marginBottom: 16, 
-    backgroundColor: '#FDFDFE', 
-    color: '#2D3748'
-  },
-  contentTextAreaField: { 
-    minHeight: 120, 
-    textAlignVertical: 'top', 
-    paddingTop: 12 
-  },
-  dateTimeInputButton: { 
-    borderWidth: 1, 
-    borderColor: '#CBD5E0', 
-    borderRadius: 8, 
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
-    marginBottom: 16, 
-    backgroundColor: '#FDFDFE'
-  },
-  dateTimeInputButtonText: { 
-    fontSize: 16, 
-    color: '#2D3748' 
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16
-  },
-  ratingOptionButton: {
-    padding: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    backgroundColor: '#F7FAFC'
-  },
-  ratingOptionButtonSelected: {
-    backgroundColor: '#4299E1',
-    borderColor: '#2B6CB0'
-  },
-  ratingOptionButtonText: {
-    fontSize: 24
-  },
-  moodSelectorContainer: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    justifyContent: 'flex-start', 
-    marginBottom: 16 
-  },
-  moodOptionButton: { 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 20, 
-    borderWidth: 1, 
-    borderColor: '#CBD5E0', 
-    marginRight: 8, 
-    marginBottom: 8, 
-    backgroundColor: '#F7FAFC' 
-  },
-  moodOptionButtonSelected: { 
-    backgroundColor: '#4299E1', 
-    borderColor: '#2B6CB0' 
-  },
-  moodOptionButtonText: { 
-    fontSize: 14, 
-    color: '#4A5568' 
-  },
-  moodOptionButtonTextSelected: { 
-    color: '#FFFFFF', 
-    fontWeight: '500' 
-  },
-  energyLevelContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16
-  },
-  energyLevelButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    backgroundColor: '#F7FAFC',
-    marginRight: 8
-  },
-  energyLevelButtonSelected: {
-    backgroundColor: '#9F7AEA',
-    borderColor: '#805AD5'
-  },
-  energyLevelButtonText: {
-    fontSize: 14,
-    color: '#4A5568'
-  },
-  energyLevelButtonTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '500'
-  },
-  sleepQualityContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16
-  },
-  sleepQualityButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E0',
-    backgroundColor: '#F7FAFC',
-    marginRight: 8
-  },
-  sleepQualityButtonSelected: {
-    backgroundColor: '#38B2AC',
-    borderColor: '#319795'
-  },
-  sleepQualityButtonText: {
-    fontSize: 14,
-    color: '#4A5568'
-  },
-  sleepQualityButtonTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '500'
-  },
-  modalActionButtonsContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 12, 
-    paddingTop: 12, 
-    borderTopWidth: 1, 
-    borderTopColor: '#E2E8F0' 
-  },
-  generalModalButton: { 
-    paddingVertical: 12, 
-    paddingHorizontal: 16, 
-    borderRadius: 8, 
-    flex: 1, 
-    alignItems: 'center', 
-    marginHorizontal: 4 
-  },
-  modalSecondaryButton: { 
-    backgroundColor: '#E2E8F0' 
-  },
-  modalPrimaryButton: { 
-    backgroundColor: '#3182CE' 
-  },
-  modalSecondaryButtonText: { 
-    color: '#2D3748', 
-    fontSize: 16, 
-    fontWeight: '600' 
-  },
-  modalPrimaryButtonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: '600' 
-  }
-});

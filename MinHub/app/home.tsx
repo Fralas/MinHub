@@ -25,6 +25,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/PlantGrowth/plantGrowth.tsx" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Virtual Plant</Text>
+          </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/Calculator/calculator" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Calculator</Text>
