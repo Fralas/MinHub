@@ -25,7 +25,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
-        <Link href="/App_inApp/PlantGrowth/plantGrowth.tsx" asChild>
+        <Link href="/App_inApp/PlantGrowth/plantGrowth" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Virtual Plant</Text>
           </TouchableOpacity>
