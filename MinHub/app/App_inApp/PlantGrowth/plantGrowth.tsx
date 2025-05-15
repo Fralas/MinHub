@@ -48,6 +48,7 @@ interface Task {
 }
 
 const GROWTH_POINTS_PER_TASK_COMPLETION = 20;
+const GROWTH_POINTS_DAILY_CHECKIN = 5;
 
 interface PlantState {
   plantId: string;
@@ -61,9 +62,10 @@ interface PlantState {
   themePreference: 'light' | 'dark' | 'forest';
   soilMoistureLevel: number;
   tasks: Task[];
+  lastCheckInDate: string | null;
 }
 
-const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v1';
+const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v2';
 
 const WATERING_COOLDOWN_MS = 5 * 1000;
 const GROWTH_POINTS_PER_WATERING = 5;
@@ -84,6 +86,7 @@ const initializePlantStateHelper = (): PlantState => {
       themePreference: 'forest',
       soilMoistureLevel: 0.5,
       tasks: [],
+      lastCheckInDate: null,
     };
 };
 
@@ -105,32 +108,72 @@ export default function PlantGrowthScreen() {
     setScreenRenderCount(prev => prev + 1);
   }, [plantState]);
 
+  const applyGrowthAndStageCheck = (currentPlantState: PlantState, pointsEarned: number, baseMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
+    let newPoints = currentPlantState.growthPoints + pointsEarned;
+    let newStage = currentPlantState.currentStage;
+    let feedbackMessage = `${baseMessage} (+${pointsEarned} pt).`;
+
+    if (newStage !== 'fruiting_plant' && newPoints >= POINTS_TO_NEXT_STAGE[newStage]) {
+      const pointsForCurrentStage = POINTS_TO_NEXT_STAGE[newStage];
+      newPoints -= pointsForCurrentStage;
+      const currentStageIndex = PLANT_STAGES.indexOf(newStage);
+      if (currentStageIndex < PLANT_STAGES.length - 1) {
+        newStage = PLANT_STAGES[currentStageIndex + 1];
+        feedbackMessage = `Wow! ${currentPlantState.plantName} è cresciuta allo stadio: ${newStage.replace(/_/g, ' ')}! (Bonus: +${pointsEarned} pt).`;
+      }
+    }
+    return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
+  };
+
   const loadPlantState = useCallback(async () => {
     setIsLoading(true);
+    let plantDataToSet: PlantState | null = null;
+    let messageForUI = '';
+
     try {
       const storedState = await AsyncStorage.getItem(PLANT_STATE_STORAGE_KEY);
+      let tempPlantState: PlantState;
+
       if (storedState) {
-        const parsedState = JSON.parse(storedState);
-        if (!parsedState.tasks) {
-            parsedState.tasks = [];
-        }
-        setPlantState(parsedState);
-        setNewPlantNameInput(parsedState.plantName || 'My Productive Sprout');
+        tempPlantState = JSON.parse(storedState);
+        if (!tempPlantState.tasks) tempPlantState.tasks = [];
+        if (typeof tempPlantState.lastCheckInDate === 'undefined') tempPlantState.lastCheckInDate = null;
       } else {
-        const initialPlant = initializePlantStateHelper();
-        setPlantState(initialPlant);
-        setNewPlantNameInput(initialPlant.plantName);
-        await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(initialPlant));
+        tempPlantState = initializePlantStateHelper();
       }
+
+      const todayString = new Date().toDateString();
+      if (tempPlantState.lastCheckInDate !== todayString) {
+        const growthResult = applyGrowthAndStageCheck(tempPlantState, GROWTH_POINTS_DAILY_CHECKIN, `Bonus check-in giornaliero per ${tempPlantState.plantName}!`);
+        tempPlantState = {
+          ...tempPlantState,
+          growthPoints: growthResult.growthPoints!,
+          currentStage: growthResult.currentStage!,
+          lastCheckInDate: todayString,
+          happinessLevel: Math.min(100, tempPlantState.happinessLevel + 5),
+        };
+        messageForUI = growthResult.feedbackMessage;
+        await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(tempPlantState));
+      }
+      plantDataToSet = tempPlantState;
+      setNewPlantNameInput(tempPlantState.plantName || 'My Productive Sprout');
+
     } catch (error) {
-      Alert.alert('Errore', 'Impossibile caricare i dati.');
-      const fallbackPlant = initializePlantStateHelper();
-      setPlantState(fallbackPlant);
-      setNewPlantNameInput(fallbackPlant.plantName);
+      Alert.alert('Errore', 'Impossibile caricare i dati della pianta.');
+      plantDataToSet = initializePlantStateHelper();
+      setNewPlantNameInput(plantDataToSet.plantName);
+       await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(plantDataToSet));
     } finally {
+      if (plantDataToSet) {
+        setPlantState(plantDataToSet);
+      }
+      if (messageForUI) {
+        setLastActionMessage(messageForUI);
+      }
       setIsLoading(false);
     }
-  }, []);
+  }, [applyGrowthAndStageCheck]);
+
 
   useFocusEffect( useCallback(() => { loadPlantState(); }, [loadPlantState]) );
 
@@ -139,26 +182,10 @@ export default function PlantGrowthScreen() {
       await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(newState));
       setPlantState(newState);
     } catch (error) {
-      Alert.alert('Errore', 'Impossibile salvare i dati.');
+      Alert.alert('Errore', 'Impossibile salvare i dati della pianta.');
     }
   };
 
-  const applyGrowthAndStageCheck = (currentPlantState: PlantState, pointsEarned: number, actionMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
-    let newPoints = currentPlantState.growthPoints + pointsEarned;
-    let newStage = currentPlantState.currentStage;
-    let feedbackMessage = actionMessage;
-
-    if (newStage !== 'fruiting_plant' && newPoints >= POINTS_TO_NEXT_STAGE[newStage]) {
-      const pointsForCurrentStage = POINTS_TO_NEXT_STAGE[newStage];
-      newPoints -= pointsForCurrentStage;
-      const currentStageIndex = PLANT_STAGES.indexOf(newStage);
-      if (currentStageIndex < PLANT_STAGES.length - 1) {
-        newStage = PLANT_STAGES[currentStageIndex + 1];
-        feedbackMessage = `Wow! ${currentPlantState.plantName} è cresciuta allo stadio: ${newStage.replace(/_/g, ' ')}!`;
-      }
-    }
-    return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
-  };
 
   const handleCareAction = (
     actionType: 'water' | 'fertilize',
@@ -190,7 +217,7 @@ export default function PlantGrowthScreen() {
       }
     }
 
-    const growthResult = applyGrowthAndStageCheck(plantState, pointsToAdd, `${actionName} ${plantState.plantName}! (+${pointsToAdd} pt).`);
+    const growthResult = applyGrowthAndStageCheck(plantState, pointsToAdd, `${actionName} ${plantState.plantName}!`);
 
     let updatedHappiness = plantState.happinessLevel;
     let updatedSoilMoisture = plantState.soilMoistureLevel;
@@ -252,7 +279,7 @@ export default function PlantGrowthScreen() {
     });
 
     if (taskCompletedText) {
-      const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PER_TASK_COMPLETION, `Task "${taskCompletedText}" completata! (+${GROWTH_POINTS_PER_TASK_COMPLETION} pt).`);
+      const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PER_TASK_COMPLETION, `Task "${taskCompletedText}" completata!`);
       const updatedHappiness = Math.min(100, plantState.happinessLevel + 5);
 
       savePlantState({
@@ -435,148 +462,38 @@ export default function PlantGrowthScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#E6FFFA',
-  },
-  scrollContentContainer: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 15,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#E6FFFA',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 18,
-    color: '#065F46',
-  },
-  plantDisplayArea: {
-    alignItems: 'center',
-    marginBottom: 25,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 20,
-    width: '100%',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  plantImageStyle: {
-    width: Dimensions.get('window').width * 0.6,
-    height: Dimensions.get('window').width * 0.6,
-    marginBottom: 15,
-  },
-  plantStageText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#065F46',
-    textTransform: 'capitalize',
-  },
-  statsContainer: {
-    alignItems: 'center',
-    marginBottom: 25,
-    width: '90%',
-  },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#047857',
-    marginBottom: 10,
-  },
-  progressBar: {
-    marginBottom: 8,
-  },
-  pointsText: {
-    fontSize: 14,
-    color: '#065F46',
-  },
-  actionButtonPrimary: {
-    backgroundColor: '#10B981', 
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    marginBottom: 15,
-    width: '85%',
-    alignItems: 'center',
-    elevation: 3,
-  },
-  actionButtonFertilize: { 
-    backgroundColor: '#F59E0B', 
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    marginBottom: 15,
-    width: '85%',
-    alignItems: 'center',
-    elevation: 3,
-  },
-  actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  actionButtonSecondary: {
-    backgroundColor: '#A7F3D0',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 20,
-    marginBottom: 15,
-    width: '80%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#6EE7B7',
-  },
-  actionButtonTextSecondary: {
-      color: '#065F46',
-      fontSize: 15,
-      fontWeight: '500',
-  },
-  actionButtonDestructive: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    marginBottom: 20,
-    width: '85%',
-    alignItems: 'center',
-    elevation: 3,
-  },
-  feedbackMessageText: {
-    marginTop: 15,
-    fontSize: 14,
-    color: '#047857',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  uselessStatsSection: {
-    marginVertical: 20,
-    padding: 15,
-    backgroundColor: '#F0FFF4',
-    borderRadius: 10,
-    width: '90%',
-    alignItems: 'center',
-  },
-  uselessStatText: {
-    fontSize: 12,
-    color: '#057A55',
-    marginBottom: 4,
-  },
-  deviceInfoFooter: {
-      marginTop: 20, 
-      paddingBottom: 10,
-      alignItems: 'center',
-      paddingVertical: 5,
-  },
-  deviceInfoText: {
-      fontSize: 9,
-      color: '#A0AEC0',
-  }
+  screenContainer: { flex: 1, backgroundColor: '#F0FDF4' },
+  scrollContentContainer: { flexGrow: 1, alignItems: 'center', paddingVertical: 20, paddingHorizontal: 15 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0FDF4' },
+  loadingText: { marginTop: 15, fontSize: 18, color: '#15803D' },
+  plantDisplayArea: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, width: '100%', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4 },
+  plantImageStyle: { width: Dimensions.get('window').width * 0.55, height: Dimensions.get('window').width * 0.55, marginBottom: 10 },
+  plantStageText: { fontSize: 20, fontWeight: '600', color: '#15803D', textTransform: 'capitalize' },
+  statsContainer: { alignItems: 'center', marginBottom: 20, width: '100%', backgroundColor: '#D1FAE5', paddingVertical:15, borderRadius:10 },
+  statsTitle: { fontSize: 18, fontWeight: 'bold', color: '#065F46', marginBottom: 10 },
+  progressBar: { marginBottom: 8 },
+  pointsText: { fontSize: 14, color: '#065F46' },
+  renamePlantSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, width: '100%', paddingHorizontal: 5, justifyContent: 'space-between' },
+  taskSection: { width: '100%', marginBottom: 20, backgroundColor: '#ECFDF5', padding:15, borderRadius:10 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#047857', marginBottom: 10, textAlign: 'center' },
+  taskInputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  inputField: { flex: 1, borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginRight: 10, backgroundColor: '#FFFFFF', fontSize:15 },
+  taskList: { width: '100%', maxHeight: 200 },
+  taskItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal:8, borderRadius: 5, marginBottom: 8, borderWidth:1, borderColor: '#D1FAE5' },
+  taskItemCompleted: { backgroundColor: '#D1FAE5' },
+  taskText: { fontSize: 16, color: '#064E3B' },
+  taskTextCompleted: { textDecorationLine: 'line-through', color: '#065F46' },
+  noTasksText: { textAlign: 'center', color: '#047857', fontStyle: 'italic', marginVertical:10 },
+  careSection: { width: '100%', marginBottom: 20, backgroundColor: '#D1FAE5', padding:15, borderRadius:10 },
+  actionButtonSmall: { backgroundColor: '#34D399', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, elevation: 2},
+  actionButtonSmallText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold'},
+  actionButtonPrimary: { backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginBottom: 10, width: '100%', alignItems: 'center', elevation: 3 },
+  actionButtonFertilize: { backgroundColor: '#F59E0B', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginBottom: 10, width: '100%', alignItems: 'center', elevation: 3 },
+  actionButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  actionButtonDestructive: { backgroundColor: '#EF4444', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginTop:10, marginBottom: 15, width: '100%', alignItems: 'center', elevation: 3 },
+  feedbackMessageText: { marginTop: 10, marginBottom:10, fontSize: 14, color: '#047857', textAlign: 'center', fontStyle: 'italic' },
+  uselessStatsSection: { marginVertical: 15, padding: 10, backgroundColor: '#E0E7FF', borderRadius: 10, width: '100%', alignItems: 'center' },
+  uselessStatText: { fontSize: 12, color: '#3730A3', marginBottom: 4 },
+  deviceInfoFooter: { marginTop: 15, paddingBottom: 10, alignItems: 'center' },
+  deviceInfoText: { fontSize: 9, color: '#A0AEC0' }
 });
