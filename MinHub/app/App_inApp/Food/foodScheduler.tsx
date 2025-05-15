@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FoodPreset, getDefaultPresets } from './foodpresets';
+import WeeklySummary from './weeklysummary';
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner';
@@ -119,6 +120,20 @@ export default function FoodScheduler() {
     return total;
   };
 
+  const getWeeklyTotals = () => {
+    return days.reduce(
+      (acc, day) => {
+        const daily = getTotalNutritionForDay(day);
+        acc.carbs += daily.carbs;
+        acc.protein += daily.protein;
+        acc.fat += daily.fat;
+        acc.calories += daily.calories;
+        return acc;
+      },
+      { carbs: 0, protein: 0, fat: 0, calories: 0 }
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -163,6 +178,8 @@ export default function FoodScheduler() {
           </View>
         )}
       />
+
+      <WeeklySummary weeklyTotals={getWeeklyTotals()} />
 
       {/* Edit Meal Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
