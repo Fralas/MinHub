@@ -102,6 +102,23 @@ export default function FoodScheduler() {
     }
   };
 
+  const getTotalNutritionForDay = (day: string) => {
+    const meals = mealPlans[day];
+    let total = { carbs: 0, protein: 0, fat: 0, calories: 0 };
+
+    Object.values(meals).forEach((mealName) => {
+      const preset = presets.find((p) => p.name.toLowerCase() === mealName.toLowerCase());
+      if (preset) {
+        total.carbs += preset.carbs;
+        total.protein += preset.protein;
+        total.fat += preset.fat;
+        total.calories += preset.calories;
+      }
+    });
+
+    return total;
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -132,6 +149,17 @@ export default function FoodScheduler() {
                 </Text>
               </TouchableOpacity>
             ))}
+
+            {/* Nutrition Totals */}
+            <View style={styles.nutritionRow}>
+              <Text style={styles.nutritionLabel}>Total Nutrition:</Text>
+              <Text style={styles.nutritionValue}>
+                {(() => {
+                  const total = getTotalNutritionForDay(day);
+                  return `Carbs: ${total.carbs}g, Protein: ${total.protein}g, Fat: ${total.fat}g, Calories: ${total.calories}`;
+                })()}
+              </Text>
+            </View>
           </View>
         )}
       />
@@ -251,6 +279,19 @@ const styles = StyleSheet.create({
   mealText: {
     color: '#555',
     fontStyle: 'italic',
+  },
+  nutritionRow: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+    paddingTop: 8,
+  },
+  nutritionLabel: {
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  nutritionValue: {
+    color: '#2c3e50',
   },
   modalContainer: {
     flex: 1,
