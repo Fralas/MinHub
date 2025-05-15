@@ -41,6 +41,7 @@ const PLANT_IMAGES: Record<PlantStage, any> = {
 };
 
 type TaskSize = 'small' | 'medium' | 'large';
+const TASK_SIZE_OPTIONS: TaskSize[] = ['small', 'medium', 'large'];
 
 interface Task {
   id: string;
@@ -59,6 +60,7 @@ const TASK_POINTS: Record<TaskSize, number> = {
 
 const GROWTH_POINTS_DAILY_CHECKIN = 5;
 const GROWTH_POINTS_PRODUCTIVE_WATERING = 35;
+const MAX_STREAK_BONUS = 15;
 
 interface PlantState {
   plantId: string;
@@ -74,9 +76,10 @@ interface PlantState {
   soilMoistureLevel: number;
   tasks: Task[];
   lastCheckInDate: string | null;
+  productiveStreak: number;
 }
 
-const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v4';
+const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v5';
 
 const WATERING_COOLDOWN_MS = 5 * 1000;
 const GROWTH_POINTS_PER_WATERING = 5;
@@ -99,6 +102,7 @@ const initializePlantStateHelper = (): PlantState => {
       soilMoistureLevel: 0.5,
       tasks: [],
       lastCheckInDate: null,
+      productiveStreak: 0,
     };
 };
 
@@ -112,16 +116,10 @@ export default function PlantGrowthScreen() {
   const [newPlantNameInput, setNewPlantNameInput] = useState<string>('');
 
   useEffect(() => {
-    if (plantState && newPlantNameInput === '') {
-        setNewPlantNameInput(plantState.plantName);
-    }
-  }, [plantState]);
-
-  useEffect(() => {
     setScreenRenderCount(prev => prev + 1);
   }, [plantState]);
 
-  const applyGrowthAndStageCheck = (currentPlantState: PlantState, pointsEarned: number, baseMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
+  const applyGrowthAndStageCheck = useCallback((currentPlantState: PlantState, pointsEarned: number, baseMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
     let newPoints = currentPlantState.growthPoints + pointsEarned;
     let newStage = currentPlantState.currentStage;
     let feedbackMessage = `${baseMessage} (+${pointsEarned} pt).`;
@@ -136,7 +134,7 @@ export default function PlantGrowthScreen() {
       }
     }
     return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
-  };
+  }, []);
 
   const loadPlantState = useCallback(async () => {
     setIsLoading(true);
@@ -146,18 +144,47 @@ export default function PlantGrowthScreen() {
     try {
       const storedState = await AsyncStorage.getItem(PLANT_STATE_STORAGE_KEY);
       let tempPlantState: PlantState;
+      const defaultInitialState = initializePlantStateHelper();
 
       if (storedState) {
-        tempPlantState = JSON.parse(storedState);
-        if (!tempPlantState.tasks) tempPlantState.tasks = [];
-        tempPlantState.tasks.forEach(task => { // Assicura che le vecchie task abbiano size e points
-            if (!task.size) task.size = 'medium';
-            if (!task.points) task.points = TASK_POINTS[task.size];
-        });
-        if (typeof tempPlantState.lastCheckInDate === 'undefined') tempPlantState.lastCheckInDate = null;
-        if (typeof tempPlantState.lastProductiveWateringDate === 'undefined') tempPlantState.lastProductiveWateringDate = null;
+        const parsedJson = JSON.parse(storedState) as Partial<PlantState>;
+        tempPlantState = {
+            ...defaultInitialState,
+            plantId: parsedJson.plantId || defaultInitialState.plantId,
+            plantName: parsedJson.plantName || defaultInitialState.plantName,
+            currentStage: (parsedJson.currentStage && PLANT_STAGES.includes(parsedJson.currentStage)) ? parsedJson.currentStage : defaultInitialState.currentStage,
+            growthPoints: typeof parsedJson.growthPoints === 'number' ? parsedJson.growthPoints : defaultInitialState.growthPoints,
+            lastWateredTimestamp: parsedJson.lastWateredTimestamp || null,
+            lastFertilizedTimestamp: parsedJson.lastFertilizedTimestamp || null,
+            lastProductiveWateringDate: parsedJson.lastProductiveWateringDate || null,
+            totalDaysGrown: typeof parsedJson.totalDaysGrown === 'number' ? parsedJson.totalDaysGrown : defaultInitialState.totalDaysGrown,
+            happinessLevel: typeof parsedJson.happinessLevel === 'number' && parsedJson.happinessLevel >= 0 && parsedJson.happinessLevel <= 100 ? parsedJson.happinessLevel : defaultInitialState.happinessLevel,
+            themePreference: parsedJson.themePreference || defaultInitialState.themePreference,
+            soilMoistureLevel: typeof parsedJson.soilMoistureLevel === 'number' && parsedJson.soilMoistureLevel >=0 && parsedJson.soilMoistureLevel <=1 ? parsedJson.soilMoistureLevel : defaultInitialState.soilMoistureLevel,
+            lastCheckInDate: parsedJson.lastCheckInDate || null,
+            productiveStreak: typeof parsedJson.productiveStreak === 'number' ? parsedJson.productiveStreak : defaultInitialState.productiveStreak,
+            tasks: [],
+        };
+
+        if (parsedJson.tasks && Array.isArray(parsedJson.tasks)) {
+            tempPlantState.tasks = parsedJson.tasks.map((task: any): Task => {
+                let determinedSize: TaskSize = 'medium';
+                if (typeof task.size === 'string' && TASK_SIZE_OPTIONS.includes(task.size as TaskSize)) {
+                    determinedSize = task.size as TaskSize;
+                }
+                const pointsForTask = Number(task.points) || TASK_POINTS[determinedSize];
+                return {
+                    id: String(task.id || `task_${Date.now()}_${Math.random().toString(16).slice(2)}`),
+                    text: String(task.text || "Task Senza Titolo"),
+                    completed: Boolean(task.completed || false),
+                    createdAt: String(task.createdAt || new Date().toISOString()),
+                    size: determinedSize,
+                    points: pointsForTask,
+                };
+            });
+        }
       } else {
-        tempPlantState = initializePlantStateHelper();
+        tempPlantState = defaultInitialState;
       }
 
       const todayString = new Date().toDateString();
@@ -174,7 +201,7 @@ export default function PlantGrowthScreen() {
         await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(tempPlantState));
       }
       plantDataToSet = tempPlantState;
-      setNewPlantNameInput(tempPlantState.plantName || 'My Productive Sprout');
+      setNewPlantNameInput(tempPlantState.plantName || defaultInitialState.plantName);
 
     } catch (error) {
       Alert.alert('Errore', 'Impossibile caricare i dati della pianta.');
@@ -185,45 +212,12 @@ export default function PlantGrowthScreen() {
       if (plantDataToSet) {
         setPlantState(plantDataToSet);
       }
-      if (messageForUI && !lastActionMessage) {
+      if (messageForUI) {
         setLastActionMessage(messageForUI);
       }
       setIsLoading(false);
     }
-  }, [applyGrowthAndStageCheck, lastActionMessage]);
-
-/*DEBUGGING AAAAAAAAAAAAAAA
-        const todayString = new Date().toDateString();
-      if (tempPlantState.lastCheckInDate !== todayString) {
-        const growthResult = applyGrowthAndStageCheck(tempPlantState, GROWTH_POINTS_DAILY_CHECKIN, `Bonus check-in giornaliero per ${tempPlantState.plantName}!`);
-        tempPlantState = {
-          ...tempPlantState,
-          growthPoints: growthResult.growthPoints!,
-          currentStage: growthResult.currentStage!,
-          lastCheckInDate: todayString,
-          happinessLevel: Math.min(100, tempPlantState.happinessLevel + 5),
-        };
-        messageForUI = growthResult.feedbackMessage;
-        await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(tempPlantState));
-      }
-      plantDataToSet = tempPlantState;
-      setNewPlantNameInput(tempPlantState.plantName || 'My Productive Sprout');
-
-    } catch (error) {
-      Alert.alert('Errore', 'Impossibile caricare i dati della pianta.');
-      plantDataToSet = initializePlantStateHelper();
-      setNewPlantNameInput(plantDataToSet.plantName);
-       await AsyncStorage.setItem(PLANT_STATE_STORAGE_KEY, JSON.stringify(plantDataToSet));
-    } finally {
-      if (plantDataToSet) {
-        setPlantState(plantDataToSet);
-      }
-      if (messageForUI && !lastActionMessage) {
-        setLastActionMessage(messageForUI);
-      }
-      setIsLoading(false);
-    }
-  }, [applyGrowthAndStageCheck, lastActionMessage]);*/
+  }, [applyGrowthAndStageCheck]);
 
 
   useFocusEffect( useCallback(() => { loadPlantState(); }, [loadPlantState]) );
@@ -291,37 +285,6 @@ export default function PlantGrowthScreen() {
     setLastActionMessage(growthResult.feedbackMessage!);
   };
 
-    const handleProductive = () => {
-    const allTasksDone = plantState(t => t.completed);
-    const todayStr = new Date();
-
-    if (!allTasksDone) {
-        Alert.alert("np");
-        setLastActionMessage("test");
-        return;
-    }
-    if (plantState.lastProductiveWateringDate === todayStr) {
-        Alert.alert("Già Fatto!", "Hai già ricevuto il bonus produttività per oggi.");
-        setLastActionMessage("Bonus produttività giornaliero già ricevuto.");
-        return;
-    }
-
-
-    const handleProductiveTT = () => {
-    const allTasksDone = plantState(t => t.completed);
-    const todayStr = new Date();
-
-    if (!allTasksDone) {
-        Alert.alert("np agaiin");
-        setLastActionMessage("test2");
-        return;
-    }
-    if (plantState.lastProductiveWateringDate === todayStr) {
-        Alert.alert("Già Fatto!", "Hai già ricevuto il bonus produttività per oggi.");
-        setLastActionMessage("Bonus produttività giornaliero già ricevuto.");
-        return;
-    }
-
   const handleWaterPlant = () => handleCareAction('water',GROWTH_POINTS_PER_WATERING, WATERING_COOLDOWN_MS, 'lastWateredTimestamp', 'Annaffiato');
   const handleFertilizePlant = () => handleCareAction('fertilize', GROWTH_POINTS_PER_FERTILIZING, FERTILIZING_COOLDOWN_MS, 'lastFertilizedTimestamp', 'Fertilizzato');
 
@@ -331,7 +294,7 @@ export default function PlantGrowthScreen() {
       return;
     }
     const newTask: Task = {
-      id: `task_${Date.now()}`,
+      id: `task_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       text: newTaskText.trim(),
       completed: false,
       createdAt: new Date().toISOString(),
@@ -346,20 +309,25 @@ export default function PlantGrowthScreen() {
 
   const handleToggleTaskCompletion = (taskId: string) => {
     if (!plantState) return;
-    let taskJustCompleted: Task | null = null;
+    let taskJustCompletedObject: Task | undefined;
 
     const updatedTasks = plantState.tasks.map(task => {
       if (task.id === taskId) {
-        if (!task.completed) {
-            taskJustCompleted = {...task, completed: true};
+        const isNowCompleting = !task.completed;
+        if (isNowCompleting) {
+            taskJustCompletedObject = task;
         }
         return { ...task, completed: !task.completed };
       }
       return task;
     });
 
-    if (taskJustCompleted) {
-      const growthResult = applyGrowthAndStageCheck(plantState, taskJustCompleted.points, `Task "${taskJustCompleted.text}" completata!`);
+    if (taskJustCompletedObject) {
+      const pointsEarned = taskJustCompletedObject.points;
+      const taskText = taskJustCompletedObject.text;
+      const taskSize = taskJustCompletedObject.size;
+
+      const growthResult = applyGrowthAndStageCheck(plantState, pointsEarned, `Task "${taskText}" (${taskSize}) completata!`);
       const updatedHappiness = Math.min(100, plantState.happinessLevel + 5);
 
       savePlantState({
@@ -373,9 +341,9 @@ export default function PlantGrowthScreen() {
       setLastActionMessage(growthResult.feedbackMessage!);
     } else {
       savePlantState({ ...plantState, tasks: updatedTasks });
-      const task = plantState.tasks.find(t => t.id === taskId); // Trova lo stato aggiornato della task
+      const task = updatedTasks.find(t => t.id === taskId);
       if (task) {
-         setLastActionMessage(`Task "${task.text}" segnata come ${task.completed ? 'completata' : 'non completata'}.`);
+         setLastActionMessage(`Task "${task.text}" segnata come non completata.`);
       }
     }
   };
@@ -397,22 +365,87 @@ export default function PlantGrowthScreen() {
         return;
     }
 
-    const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PRODUCTIVE_WATERING, `Super Annaffiatura Giornaliera per ${plantState.plantName}!`);
-    const updatedHappiness = Math.min(100, plantState.happinessLevel + 20);
+    let currentStreak = plantState.productiveStreak || 0;
+    let newStreak = 0;
+    let streakBonusPoints = 0;
+    let streakMessage = "";
 
-    const newState = {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
+
+    if (plantState.lastProductiveWateringDate === yesterdayStr) {
+        newStreak = currentStreak + 1;
+    } else {
+        newStreak = 1;
+    }
+    streakBonusPoints = newStreak > 1 ? Math.min(MAX_STREAK_BONUS, newStreak * 2) : 0;
+    if (newStreak > 1) {
+        streakMessage = ` Serie di ${newStreak} giorni produttivi! +${streakBonusPoints} punti extra!`;
+    }
+
+    const totalPointsEarned = GROWTH_POINTS_PRODUCTIVE_WATERING + streakBonusPoints;
+    const growthResult = applyGrowthAndStageCheck(plantState, totalPointsEarned, `Super Annaffiatura Giornaliera per ${plantState.plantName}!`);
+    const updatedHappiness = Math.min(100, plantState.happinessLevel + 20 + (newStreak > 1 ? 5 : 0));
+
+    const newState: PlantState = {
         ...plantState,
         growthPoints: growthResult.growthPoints!,
         currentStage: growthResult.currentStage!,
         happinessLevel: updatedHappiness,
         lastProductiveWateringDate: todayStr,
+        productiveStreak: newStreak,
         totalDaysGrown: plantState.totalDaysGrown + 1,
     };
     savePlantState(newState);
-    Alert.alert("Bonus Giornaliero!", growthResult.feedbackMessage!);
-    setLastActionMessage(growthResult.feedbackMessage!);
+    Alert.alert("Bonus Giornaliero!", growthResult.feedbackMessage! + streakMessage);
+    setLastActionMessage(growthResult.feedbackMessage! + streakMessage);
   };
 
+  const handleDeleteTask = (taskId: string) => {
+    if (!plantState) return;
+    const taskToDelete = plantState.tasks.find(t => t.id === taskId);
+    if (!taskToDelete) return;
+
+    Alert.alert(
+        "Elimina Task",
+        `Sei sicuro di voler eliminare la task "${taskToDelete.text}"?`,
+        [
+            { text: "Annulla", style: "cancel" },
+            {
+                text: "Elimina", style: "destructive",
+                onPress: () => {
+                    const updatedTasks = plantState.tasks.filter(task => task.id !== taskId);
+                    savePlantState({ ...plantState, tasks: updatedTasks });
+                    setLastActionMessage(`Task "${taskToDelete.text}" eliminata.`);
+                }
+            }
+        ]
+    );
+  };
+
+  const handleClearCompletedTasks = () => {
+    if (!plantState || !plantState.tasks.some(t => t.completed)) {
+        Alert.alert("Nessuna Task Completata", "Non ci sono task completate da eliminare.");
+        return;
+    }
+    Alert.alert(
+        "Pulisci Task Completate",
+        "Sei sicuro di voler eliminare tutte le task completate?",
+        [
+            { text: "Annulla", style: "cancel" },
+            {
+                text: "Pulisci", style: "destructive",
+                onPress: () => {
+                    const updatedTasks = plantState.tasks.filter(task => !task.completed);
+                    savePlantState({ ...plantState, tasks: updatedTasks });
+                    setLastActionMessage("Task completate eliminate.");
+                }
+            }
+        ]
+    );
+  };
 
   const handleRenamePlant = () => {
     if (!plantState || newPlantNameInput.trim() === '') {
@@ -462,18 +495,24 @@ export default function PlantGrowthScreen() {
     const allTasksDone = plant.tasks.length > 0 && plant.tasks.every(t => t.completed);
     const productiveWateringAvailableToday = allTasksDone && plant.lastProductiveWateringDate !== todayStr;
 
-    if (productiveWateringAvailableToday) return `${plant.plantName} ha fatto un ottimo lavoro! Pronta per la Super Annaffiatura!`;
-    if (allTasksDone && plant.tasks.length > 0) return `${plant.plantName} è soddisfatta! Tutte le task sono complete per ora.`;
-    
+    if (productiveWateringAvailableToday) return `${plant.plantName} è fiera di te! Pronta per la Super Annaffiatura!`;
+    if (allTasksDone && plant.tasks.length > 0) {
+        if (plant.productiveStreak > 1) return `${plant.plantName} è al settimo cielo! ${plant.productiveStreak} giorni di produttività!`;
+        return `${plant.plantName} è soddisfatta! Tutte le task sono complete per oggi.`;
+    }
+
     const incompleteTasks = plant.tasks.filter(t => !t.completed);
+    if (incompleteTasks.length > 5) return `${plant.plantName} si sente un po' sopraffatta da ${incompleteTasks.length} task... Forza!`;
     if (incompleteTasks.length > 0) return `${plant.plantName} aspetta che ${incompleteTasks.length === 1 ? '1 task venga completata' : `${incompleteTasks.length} task vengano completate`}.`;
-    
-    if (plant.happinessLevel < 40) return `${plant.plantName} sembra un po' triste...`;
-    if (plant.soilMoistureLevel < 0.25) return `${plant.plantName} ha sete!`;
 
-    return `${plant.plantName} sta bene! Continua così.`;
+    if (plant.happinessLevel < 30) return `${plant.plantName} ha bisogno di più attenzioni e task completate!`;
+    if (plant.happinessLevel < 50) return `${plant.plantName} sembra un po' giù. Completare qualche task aiuterebbe!`;
+    if (plant.soilMoistureLevel < 0.25) return `${plant.plantName} ha sete! Un po' d'acqua?`;
+
+    if (plant.tasks.length === 0) return `${plant.plantName} è pronta per nuove sfide! Aggiungi qualche task.`
+
+    return `${plant.plantName} sta bene e apprezza la tua produttività!`;
   };
-
 
   if (isLoading || !plantState) {
     return (
@@ -494,6 +533,7 @@ export default function PlantGrowthScreen() {
           <Image source={getPlantImage()} style={styles.plantImageStyle} resizeMode="contain" />
           <Text style={styles.plantStageText}>Stadio: {plantState.currentStage.replace(/_/g, ' ')}</Text>
           <Text style={styles.plantMoodText}>{getPlantMoodMessage(plantState)}</Text>
+          {plantState.productiveStreak > 1 && <Text style={styles.streakText}>Serie Produttiva: {plantState.productiveStreak} giorni! 🔥</Text>}
         </View>
 
         <View style={styles.statsContainer}>
@@ -520,6 +560,7 @@ export default function PlantGrowthScreen() {
                 placeholder="Nome della tua pianta"
                 value={newPlantNameInput}
                 onChangeText={setNewPlantNameInput}
+                maxLength={30}
             />
             <TouchableOpacity style={styles.actionButtonSmall} onPress={handleRenamePlant}>
                 <Text style={styles.actionButtonSmallText}>Salva Nome</Text>
@@ -529,9 +570,9 @@ export default function PlantGrowthScreen() {
         <View style={styles.taskSection}>
           <Text style={styles.sectionTitle}>Le Tue Task Produttive</Text>
           <View style={styles.taskSizeSelector}>
-            {(['small', 'medium', 'large'] as TaskSize[]).map(size => (
-                <TouchableOpacity 
-                    key={size} 
+            {(TASK_SIZE_OPTIONS).map(size => (
+                <TouchableOpacity
+                    key={size}
                     style={[styles.taskSizeButton, newTaskSize === size && styles.taskSizeButtonSelected]}
                     onPress={() => setNewTaskSize(size)}
                 >
@@ -542,9 +583,10 @@ export default function PlantGrowthScreen() {
           <View style={styles.taskInputContainer}>
             <TextInput
               style={styles.inputField}
-              placeholder={`Nuova task (${newTaskSize})...`}
+              placeholder={`Nuova task (${newTaskSize}, ${TASK_POINTS[newTaskSize]}pt)...`}
               value={newTaskText}
               onChangeText={setNewTaskText}
+              maxLength={100}
             />
             <TouchableOpacity style={styles.actionButtonSmall} onPress={handleAddTask}>
               <Text style={styles.actionButtonSmallText}>Aggiungi</Text>
@@ -554,23 +596,38 @@ export default function PlantGrowthScreen() {
             <Text style={styles.noTasksText}>Nessuna task ancora. Aggiungine una!</Text>
           ) : (
             <FlatList
-              data={plantState.tasks.sort((a,b) => a.completed === b.completed ? 0 : a.completed ? 1 : -1)}
+              data={plantState.tasks.sort((a,b) => {
+                if (a.completed === b.completed) {
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                }
+                return a.completed ? 1 : -1;
+              })}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.taskItem, item.completed && styles.taskItemCompleted]}
-                  onPress={() => handleToggleTaskCompletion(item.id)}
-                >
-                  <View style={styles.taskItemContent}>
-                    <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>
-                        {item.completed ? '✓ ' : '○ '} {item.text}
-                    </Text>
-                    <Text style={styles.taskPointsText}>({item.points} pt)</Text>
-                  </View>
-                </TouchableOpacity>
+              renderItem={({ item }: { item: Task }) => (
+                <View style={styles.taskItemContainer}>
+                    <TouchableOpacity
+                    style={[styles.taskItem, item.completed && styles.taskItemCompleted]}
+                    onPress={() => handleToggleTaskCompletion(item.id)}
+                    >
+                        <View style={styles.taskItemContent}>
+                            <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>
+                                {item.completed ? '✓ ' : '○ '} {item.text}
+                            </Text>
+                            <Text style={styles.taskPointsText}>({item.points} pt)</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteTask(item.id)} style={styles.deleteTaskButton}>
+                        <Text style={styles.deleteTaskButtonText}>✕</Text>
+                    </TouchableOpacity>
+                </View>
               )}
               style={styles.taskList}
             />
+          )}
+          {plantState.tasks.some(t => t.completed) && (
+            <TouchableOpacity style={styles.clearCompletedButton} onPress={handleClearCompletedTasks}>
+                <Text style={styles.clearCompletedButtonText}>Pulisci Task Completate</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -624,7 +681,8 @@ const styles = StyleSheet.create({
   plantDisplayArea: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, width: '100%', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4 },
   plantImageStyle: { width: Dimensions.get('window').width * 0.55, height: Dimensions.get('window').width * 0.55, marginBottom: 10 },
   plantStageText: { fontSize: 20, fontWeight: '600', color: '#15803D', textTransform: 'capitalize' },
-  plantMoodText: { fontSize: 14, color: '#047857', fontStyle: 'italic', marginTop: 5, textAlign: 'center' },
+  plantMoodText: { fontSize: 14, color: '#047857', fontStyle: 'italic', marginTop: 5, textAlign: 'center', minHeight: 20 },
+  streakText: {fontSize: 14, color: '#DD2C00', fontWeight: 'bold', marginTop: 5, textAlign: 'center'},
   statsContainer: { alignItems: 'center', marginBottom: 20, width: '100%', backgroundColor: '#D1FAE5', paddingVertical:15, borderRadius:10 },
   statsTitle: { fontSize: 18, fontWeight: 'bold', color: '#065F46', marginBottom: 10 },
   progressBar: { marginBottom: 8 },
@@ -632,21 +690,26 @@ const styles = StyleSheet.create({
   renamePlantSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, width: '100%', paddingHorizontal: 5, justifyContent: 'space-between' },
   taskSection: { width: '100%', marginBottom: 20, backgroundColor: '#ECFDF5', padding:15, borderRadius:10 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#047857', marginBottom: 10, textAlign: 'center' },
-  taskSizeSelector: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
-  taskSizeButton: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, borderWidth: 1, borderColor: '#6EE7B7' },
+  taskSizeSelector: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12, paddingHorizontal:10 },
+  taskSizeButton: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, borderWidth: 1, borderColor: '#6EE7B7', backgroundColor: '#FFFFFF' },
   taskSizeButtonSelected: { backgroundColor: '#34D399', borderColor: '#10B981' },
-  taskSizeButtonText: { color: '#065F46', fontSize: 14 },
+  taskSizeButtonText: { color: '#065F46', fontSize: 14, fontWeight:'500' },
   taskSizeButtonTextSelected: { color: '#FFFFFF', fontWeight: 'bold' },
   taskInputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  inputField: { flex: 1, borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginRight: 10, backgroundColor: '#FFFFFF', fontSize:15 },
+  inputField: { flex: 1, borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 8, marginRight: 10, backgroundColor: '#FFFFFF', fontSize:15 },
   taskList: { width: '100%', maxHeight: 250 },
-  taskItem: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal:8, borderRadius: 5, marginBottom: 8, borderWidth:1, borderColor: '#D1FAE5' },
-  taskItemCompleted: { backgroundColor: '#D1FAE5' },
-  taskItemContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  taskText: { fontSize: 16, color: '#064E3B', flex: 1, marginRight: 5 },
+  taskItemContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8},
+  taskItem: { flex: 1, backgroundColor: '#FFFFFF', paddingVertical: 12, paddingHorizontal:10, borderRadius: 5, borderWidth:1, borderColor: '#D1FAE5' },
+  taskItemCompleted: { backgroundColor: '#E0F2F7' },
+  taskItemContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flex: 1 },
+  taskText: { fontSize: 16, color: '#064E3B', flexShrink: 1, marginRight: 5 },
   taskTextCompleted: { textDecorationLine: 'line-through', color: '#065F46' },
   taskPointsText: { fontSize: 12, color: '#047857', fontStyle: 'italic'},
+  deleteTaskButton: { paddingLeft: 12, paddingVertical: 10, justifyContent: 'center'},
+  deleteTaskButtonText: { color: '#EF4444', fontSize: 18, fontWeight: 'bold' },
   noTasksText: { textAlign: 'center', color: '#047857', fontStyle: 'italic', marginVertical:10 },
+  clearCompletedButton: { backgroundColor: '#6EE7B7', paddingVertical: 10, borderRadius: 8, marginTop: 10, alignItems: 'center' },
+  clearCompletedButtonText: { color: '#064E3B', fontSize: 14, fontWeight: '500'},
   careSection: { width: '100%', marginBottom: 20, backgroundColor: '#D1FAE5', padding:15, borderRadius:10 },
   actionButtonSmall: { backgroundColor: '#34D399', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, elevation: 2},
   actionButtonSmallText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold'},
