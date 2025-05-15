@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   TextInput,
   Button,
 } from 'react-native';
+
+import { FoodPreset, loadPresets, savePresets, getDefaultPresets } from './foodpresets';
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -26,10 +28,21 @@ export default function FoodScheduler() {
     }, {} as Record<string, MealPlan>);
   });
 
+  const [presets, setPresets] = useState<FoodPreset[]>(getDefaultPresets());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<MealType>('Breakfast');
   const [modalVisible, setModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
+
+  //load presets on mount
+  useEffect(() => {
+    loadPresets().then(setPresets);
+  }, []);
+
+  //save presets on change
+  useEffect(() => {
+    savePresets(presets);
+  }, [presets]);
 
   const openModal = (day: string, mealType: MealType) => {
     setSelectedDay(day);
