@@ -9,11 +9,10 @@ import {
   TextInput,
   Button,
 } from 'react-native';
-
-import { FoodPreset, loadPresets, savePresets, getDefaultPresets } from './foodpresets';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FoodPreset, getDefaultPresets } from './foodpresets';
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner';
 
 type MealPlan = {
@@ -28,21 +27,38 @@ export default function FoodScheduler() {
     }, {} as Record<string, MealPlan>);
   });
 
-  const [presets, setPresets] = useState<FoodPreset[]>(getDefaultPresets());
+  const [presets, setPresets] = useState<FoodPreset[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<MealType>('Breakfast');
   const [modalVisible, setModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [addPresetModalVisible, setAddPresetModalVisible] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newCarbs, setNewCarbs] = useState('');
+  const [newProtein, setNewProtein] = useState('');
+  const [newFat, setNewFat] = useState('');
+  const [newCalories, setNewCalories] = useState('');
 
-  //load presets on mount
+  const PRESET_KEY = 'food_presets';
+
   useEffect(() => {
-    loadPresets().then(setPresets);
+    const loadPresets = async () => {
+      const stored = await AsyncStorage.getItem(PRESET_KEY);
+      if (stored) {
+        setPresets(JSON.parse(stored));
+      } else {
+        const defaults = getDefaultPresets();
+        setPresets(defaults);
+        await AsyncStorage.setItem(PRESET_KEY, JSON.stringify(defaults));
+      }
+    };
+    loadPresets();
   }, []);
 
-  //save presets on change
-  useEffect(() => {
-    savePresets(presets);
-  }, [presets]);
+  const savePresets = async (updated: FoodPreset[]) => {
+    setPresets(updated);
+    await AsyncStorage.setItem(PRESET_KEY, JSON.stringify(updated));
+  };
 
   const openModal = (day: string, mealType: MealType) => {
     setSelectedDay(day);
@@ -64,9 +80,40 @@ export default function FoodScheduler() {
     setModalVisible(false);
   };
 
+  const addNewPreset = () => {
+    if (newPresetName.trim()) {
+      const updatedPresets = [
+        ...presets,
+        {
+          name: newPresetName.trim(),
+          carbs: parseFloat(newCarbs) || 0,
+          protein: parseFloat(newProtein) || 0,
+          fat: parseFloat(newFat) || 0,
+          calories: parseFloat(newCalories) || 0,
+        },
+      ];
+      savePresets(updatedPresets);
+      setNewPresetName('');
+      setNewCarbs('');
+      setNewProtein('');
+      setNewFat('');
+      setNewCalories('');
+      setAddPresetModalVisible(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Weekly Food Scheduler</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Weekly Food Scheduler</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setAddPresetModalVisible(true)}
+        >
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={days}
         keyExtractor={(item) => item}
@@ -89,7 +136,8 @@ export default function FoodScheduler() {
         )}
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      {/* Edit Meal Modal */}
+      <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit {selectedMealType}</Text>
@@ -104,6 +152,51 @@ export default function FoodScheduler() {
           </View>
         </View>
       </Modal>
+
+      {/* Add Preset Modal */}
+      <Modal visible={addPresetModalVisible} animationType="slide" transparent>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add New Food Preset</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Preset name"
+              value={newPresetName}
+              onChangeText={setNewPresetName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Carbs (g)"
+              keyboardType="numeric"
+              value={newCarbs}
+              onChangeText={setNewCarbs}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Protein (g)"
+              keyboardType="numeric"
+              value={newProtein}
+              onChangeText={setNewProtein}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Fat (g)"
+              keyboardType="numeric"
+              value={newFat}
+              onChangeText={setNewFat}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Calories"
+              keyboardType="numeric"
+              value={newCalories}
+              onChangeText={setNewCalories}
+            />
+            <Button title="Add" onPress={addNewPreset} />
+            <Button title="Cancel" onPress={() => setAddPresetModalVisible(false)} color="#aaa" />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -114,11 +207,26 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#fdfdfd',
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  addButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    marginBottom: 10,
     color: '#2c3e50',
   },
   dayCard: {

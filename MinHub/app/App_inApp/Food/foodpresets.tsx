@@ -1,6 +1,6 @@
+// foodPresets.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-//Food type structure
 export type FoodPreset = {
  name: string;
  carbs: number;
@@ -21,7 +21,6 @@ export const getDefaultPresets = (): FoodPreset[] => [
  },
 ];
 
-//async stora
 export const loadPresets = async (): Promise<FoodPreset[]> => {
  try {
   const json = await AsyncStorage.getItem(STORAGE_KEY);
