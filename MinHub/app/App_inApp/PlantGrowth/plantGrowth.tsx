@@ -49,6 +49,8 @@ interface Task {
 
 const GROWTH_POINTS_PER_TASK_COMPLETION = 20;
 const GROWTH_POINTS_DAILY_CHECKIN = 5;
+const GROWTH_POINTS_PRODUCTIVE_WATERING = 35;
+
 
 interface PlantState {
   plantId: string;
@@ -57,6 +59,7 @@ interface PlantState {
   growthPoints: number;
   lastWateredTimestamp: string | null;
   lastFertilizedTimestamp: string | null;
+  lastProductiveWateringDate: string | null;
   totalDaysGrown: number;
   happinessLevel: number;
   themePreference: 'light' | 'dark' | 'forest';
@@ -65,7 +68,7 @@ interface PlantState {
   lastCheckInDate: string | null;
 }
 
-const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v2';
+const PLANT_STATE_STORAGE_KEY = '@minhub_productivePlantState_v3';
 
 const WATERING_COOLDOWN_MS = 5 * 1000;
 const GROWTH_POINTS_PER_WATERING = 5;
@@ -81,6 +84,7 @@ const initializePlantStateHelper = (): PlantState => {
       growthPoints: 0,
       lastWateredTimestamp: null,
       lastFertilizedTimestamp: null,
+      lastProductiveWateringDate: null,
       totalDaysGrown: 0,
       happinessLevel: 75,
       themePreference: 'forest',
@@ -125,6 +129,40 @@ export default function PlantGrowthScreen() {
     return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
   };
 
+  const testOnePlant = (currentPlantState: PlantState, pointsEarned: number, baseMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
+    let newPoints = currentPlantState.growthPoints + pointsEarned;
+    let newStage = currentPlantState.currentStage;
+    let feedbackMessage = `${baseMessage} (+${pointsEarned} pt).`;
+
+    if (newStage !== 'fruiting_plant' && newPoints >= POINTS_TO_NEXT_STAGE[newStage]) {
+      const pointsForCurrentStage = POINTS_TO_NEXT_STAGE[newStage];
+      newPoints -= pointsForCurrentStage;
+      const currentStageIndex = PLANT_STAGES.indexOf(newStage);
+      if (currentStageIndex < PLANT_STAGES.length - 1) {
+        newStage = PLANT_STAGES[currentStageIndex + 1];
+        feedbackMessage = `Wow! ${currentPlantState.plantName} è cresciuta allo stadio: ${newStage.replace(/_/g, ' ')}! (Bonus: +${pointsEarned} pt).`;
+      }
+    }
+    return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
+  };
+
+  const testTwoPlant = (currentPlantState: PlantState, pointsEarned: number, baseMessage: string): Partial<PlantState> & { feedbackMessage: string } => {
+    let newPoints = currentPlantState.growthPoints + pointsEarned;
+    let newStage = currentPlantState.currentStage;
+    let feedbackMessage = `${baseMessage} (+${pointsEarned} pt).`;
+
+    if (newStage !== 'fruiting_plant' && newPoints >= POINTS_TO_NEXT_STAGE[newStage]) {
+      const pointsForCurrentStage = POINTS_TO_NEXT_STAGE[newStage];
+      newPoints -= pointsForCurrentStage;
+      const currentStageIndex = PLANT_STAGES.indexOf(newStage);
+      if (currentStageIndex < PLANT_STAGES.length - 1) {
+        newStage = PLANT_STAGES[currentStageIndex + 1];
+        feedbackMessage = `Wow! ${currentPlantState.plantName} è cresciuta allo stadio: ${newStage.replace(/_/g, ' ')}! (Bonus: +${pointsEarned} pt).`;
+      }
+    }
+    return { growthPoints: newPoints, currentStage: newStage, feedbackMessage };
+  };
+
   const loadPlantState = useCallback(async () => {
     setIsLoading(true);
     let plantDataToSet: PlantState | null = null;
@@ -138,6 +176,7 @@ export default function PlantGrowthScreen() {
         tempPlantState = JSON.parse(storedState);
         if (!tempPlantState.tasks) tempPlantState.tasks = [];
         if (typeof tempPlantState.lastCheckInDate === 'undefined') tempPlantState.lastCheckInDate = null;
+        if (typeof tempPlantState.lastProductiveWateringDate === 'undefined') tempPlantState.lastProductiveWateringDate = null;
       } else {
         tempPlantState = initializePlantStateHelper();
       }
@@ -167,12 +206,12 @@ export default function PlantGrowthScreen() {
       if (plantDataToSet) {
         setPlantState(plantDataToSet);
       }
-      if (messageForUI) {
+      if (messageForUI && !lastActionMessage) { 
         setLastActionMessage(messageForUI);
       }
       setIsLoading(false);
     }
-  }, [applyGrowthAndStageCheck]);
+  }, [applyGrowthAndStageCheck, lastActionMessage]);
 
 
   useFocusEffect( useCallback(() => { loadPlantState(); }, [loadPlantState]) );
@@ -185,7 +224,6 @@ export default function PlantGrowthScreen() {
       Alert.alert('Errore', 'Impossibile salvare i dati della pianta.');
     }
   };
-
 
   const handleCareAction = (
     actionType: 'water' | 'fertilize',
@@ -218,7 +256,6 @@ export default function PlantGrowthScreen() {
     }
 
     const growthResult = applyGrowthAndStageCheck(plantState, pointsToAdd, `${actionName} ${plantState.plantName}!`);
-
     let updatedHappiness = plantState.happinessLevel;
     let updatedSoilMoisture = plantState.soilMoistureLevel;
 
@@ -229,9 +266,10 @@ export default function PlantGrowthScreen() {
       updatedHappiness = Math.min(100, plantState.happinessLevel + HAPPINESS_BOOST_FERTILIZING);
     }
 
-    const oldDate = plantState[lastActionTimestampKey] ? new Date(plantState[lastActionTimestampKey]!) : null;
-    const currentDate = new Date();
-    const newDayHasPassed = oldDate ? oldDate.toDateString() !== currentDate.toDateString() : true;
+    const todayString = new Date().toDateString();
+    const lastCareDateString = plantState[lastActionTimestampKey] ? new Date(plantState[lastActionTimestampKey]!).toDateString() : null;
+    const newDayHasPassed = lastCareDateString !== todayString;
+
 
     const newState: PlantState = {
       ...plantState,
@@ -269,19 +307,23 @@ export default function PlantGrowthScreen() {
 
   const handleToggleTaskCompletion = (taskId: string) => {
     if (!plantState) return;
-    let taskCompletedText = '';
+    let taskJustCompletedText = '';
+    let taskWasCompleted = false;
+
     const updatedTasks = plantState.tasks.map(task => {
       if (task.id === taskId) {
-        if (!task.completed) taskCompletedText = task.text;
+        taskWasCompleted = task.completed;
+        if (!task.completed) {
+            taskJustCompletedText = task.text;
+        }
         return { ...task, completed: !task.completed };
       }
       return task;
     });
 
-    if (taskCompletedText) {
-      const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PER_TASK_COMPLETION, `Task "${taskCompletedText}" completata!`);
+    if (taskJustCompletedText) {
+      const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PER_TASK_COMPLETION, `Task "${taskJustCompletedText}" completata!`);
       const updatedHappiness = Math.min(100, plantState.happinessLevel + 5);
-
       savePlantState({
         ...plantState,
         tasks: updatedTasks,
@@ -294,9 +336,47 @@ export default function PlantGrowthScreen() {
     } else {
       savePlantState({ ...plantState, tasks: updatedTasks });
       const task = plantState.tasks.find(t => t.id === taskId);
-      if (task) setLastActionMessage(`Task "${task.text}" aggiornata.`);
+      if (task) {
+         setLastActionMessage(`Task "${task.text}" segnata come ${task.completed ? 'non completata' : 'completata'}.`);
+      }
     }
   };
+
+  const handleProductiveWatering = () => {
+    if (!plantState) return;
+
+    const allTasksDone = plantState.tasks.length > 0 && plantState.tasks.every(t => t.completed);
+    const todayStr = new Date().toDateString();
+
+    if (!allTasksDone) {
+        Alert.alert("Task Incomplete", "Devi prima completare tutte le tue task per la super annaffiatura!");
+        setLastActionMessage("Completa tutte le task per il bonus giornaliero.");
+        return;
+    }
+    if (plantState.lastProductiveWateringDate === todayStr) {
+        Alert.alert("Già Fatto!", "Hai già ricevuto il bonus produttività per oggi.");
+        setLastActionMessage("Bonus produttività giornaliero già ricevuto.");
+        return;
+    }
+
+    const growthResult = applyGrowthAndStageCheck(plantState, GROWTH_POINTS_PRODUCTIVE_WATERING, `Super Annaffiatura Giornaliera per ${plantState.plantName}!`);
+    const updatedHappiness = Math.min(100, plantState.happinessLevel + 20);
+    const newDayHasPassed = plantState.lastProductiveWateringDate !== todayStr;
+
+
+    const newState = {
+        ...plantState,
+        growthPoints: growthResult.growthPoints!,
+        currentStage: growthResult.currentStage!,
+        happinessLevel: updatedHappiness,
+        lastProductiveWateringDate: todayStr,
+        totalDaysGrown: plantState.totalDaysGrown + (newDayHasPassed ? 1 : 0),
+    };
+    savePlantState(newState);
+    Alert.alert("Bonus Giornaliero!", growthResult.feedbackMessage!);
+    setLastActionMessage(growthResult.feedbackMessage!);
+  };
+
 
   const handleRenamePlant = () => {
     if (!plantState || newPlantNameInput.trim() === '') {
@@ -328,14 +408,9 @@ export default function PlantGrowthScreen() {
   };
 
   const getPlantImage = () => {
-    if (!plantState) {
-      return PLANT_IMAGES.seed;
-    }
+    if (!plantState) return PLANT_IMAGES.seed;
     const image = PLANT_IMAGES[plantState.currentStage];
-    if (!image) {
-      return PLANT_IMAGES.seed;
-    }
-    return image;
+    return image || PLANT_IMAGES.seed;
   };
 
   const calculateProgressToNextStage = (): number => {
@@ -345,6 +420,19 @@ export default function PlantGrowthScreen() {
     return Math.max(0, Math.min(1, plantState.growthPoints / pointsNeeded));
   };
 
+  const areAllTasksCompletedForToday = () => {
+    if (!plantState || plantState.tasks.length === 0) return false;
+    return plantState.tasks.every(task => task.completed);
+  };
+
+  const canProductiveWater = () => {
+    if (!plantState) return false;
+    const allTasksDone = areAllTasksCompletedForToday();
+    const todayStr = new Date().toDateString();
+    return allTasksDone && plantState.lastProductiveWateringDate !== todayStr;
+  };
+
+
   if (isLoading || !plantState) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -353,6 +441,8 @@ export default function PlantGrowthScreen() {
       </SafeAreaView>
     );
   }
+
+  const isProductiveWateringEnabled = canProductiveWater();
 
   return (
     <SafeAreaView style={styles.screenContainer}>
@@ -427,8 +517,16 @@ export default function PlantGrowthScreen() {
           )}
         </View>
 
+        <TouchableOpacity
+            style={[styles.actionButtonProductive, !isProductiveWateringEnabled && styles.actionButtonDisabled]}
+            onPress={handleProductiveWatering}
+            disabled={!isProductiveWateringEnabled}
+        >
+            <Text style={styles.actionButtonText}>Super Annaffiatura Giornaliera ({GROWTH_POINTS_PRODUCTIVE_WATERING} pt)</Text>
+        </TouchableOpacity>
+
         <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>Cura della Pianta</Text>
+            <Text style={styles.sectionTitle}>Cura Regolare</Text>
             <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleWaterPlant}>
             <Text style={styles.actionButtonText}>Annaffia ({GROWTH_POINTS_PER_WATERING} pt)</Text>
             </TouchableOpacity>
@@ -489,8 +587,10 @@ const styles = StyleSheet.create({
   actionButtonSmallText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold'},
   actionButtonPrimary: { backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginBottom: 10, width: '100%', alignItems: 'center', elevation: 3 },
   actionButtonFertilize: { backgroundColor: '#F59E0B', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginBottom: 10, width: '100%', alignItems: 'center', elevation: 3 },
+  actionButtonProductive: { backgroundColor: '#2563EB', paddingVertical: 15, paddingHorizontal: 25, borderRadius: 20, marginVertical: 10, width: '100%', alignItems: 'center', elevation: 3 },
   actionButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
   actionButtonDestructive: { backgroundColor: '#EF4444', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, marginTop:10, marginBottom: 15, width: '100%', alignItems: 'center', elevation: 3 },
+  actionButtonDisabled: { backgroundColor: '#9CA3AF' },
   feedbackMessageText: { marginTop: 10, marginBottom:10, fontSize: 14, color: '#047857', textAlign: 'center', fontStyle: 'italic' },
   uselessStatsSection: { marginVertical: 15, padding: 10, backgroundColor: '#E0E7FF', borderRadius: 10, width: '100%', alignItems: 'center' },
   uselessStatText: { fontSize: 12, color: '#3730A3', marginBottom: 4 },
