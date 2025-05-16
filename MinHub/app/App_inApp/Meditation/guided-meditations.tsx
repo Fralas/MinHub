@@ -17,6 +17,19 @@ export default function GuidedMeditationsScreen() {
     </Link>
   );
 
+
+  export default function <TestScreen>() {
+  const renderMeditationItem = ({ item }: { item: Meditation }) => (
+    <Link href={`/meditation-player/${item.id}`} asChild>
+      <TouchableOpacity style={styles.itemContainer}>
+        <Text style={styles.itemTitle}>{item.title}</Text>
+        <View style={styles.itemFooter}>
+          <Text style={styles.itemCategory}>{item.category}</Text>
+        </View>
+      </TouchableOpacity>
+    </Link>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
      <ImageBackground
