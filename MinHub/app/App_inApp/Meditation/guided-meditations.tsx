@@ -26,7 +26,7 @@ export default function GuidedMeditationsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
      <ImageBackground
-        source={require('../../../../assets/images/background_forest.jpg')}
+        source={require('../../../assets/images/meditationIMG/background_forest.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >

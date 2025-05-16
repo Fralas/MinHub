@@ -3,41 +3,41 @@ export interface Meditation {
   title: string;
   description: string;
   durationMinutes: number;
-  category: 'Sonno' | 'Stress' | 'Focus' | 'Principianti';
+  category: 'Sleep' | 'Stress' | 'Focus' | 'Beginners';
   audioFile: any;
 }
 
 export const MEDITATIONS_DATA: Meditation[] = [
   {
     id: 'med101',
-    title: 'Respiro Consapevole',
-    description: 'Una breve meditazione per principianti per concentrarsi sul respiro e ritrovare la calma interiore.',
+    title: 'Mindful Breathing',
+    description: 'A short meditation for beginners to focus on breathing and find inner calm.',
     durationMinutes: 5,
-    category: 'Principianti',
-    audioFile: require('../../assets/audio/respiro_consapevole_5min.mp3'),
+    category: 'Beginners',
+    audioFile: require('../../../assets/audio/meditationAUDIO/a.mp3'),
   },
   {
     id: 'med102',
-    title: 'Rilassamento Profondo Anti-Stress',
-    description: 'Lascia andare le tensioni accumulate durante la giornata e immergiti in uno stato di profondo rilassamento.',
+    title: 'Deep Relaxation Anti-Stress',
+    description: 'Release the tensions accumulated during the day and immerse yourself in a state of deep relaxation.',
     durationMinutes: 10,
     category: 'Stress',
-    audioFile: require('../../assets/audio/rilassamento_profondo_10min.mp3'),
+    audioFile: require('../../../assets/audio/meditationAUDIO/b.mp3'),
   },
   {
     id: 'med103',
-    title: 'Focus Mattutino Energizzante',
-    description: 'Inizia la giornata con mente lucida, energia positiva e una maggiore capacità di concentrazione.',
-    durationMinutes: 7,
+    title: 'Energizing Morning Focus',
+    description: 'Start your day with a clear mind, positive energy, and improved concentration.',
+    durationMinutes: 8,
     category: 'Focus',
-    audioFile: require('../../assets/audio/focus_mattutino_7min.mp3'),
+    audioFile: require('../../../assets/audio/meditationAUDIO/c.mp3'),
   },
   {
     id: 'med104',
-    title: 'Meditazione per Dormire Sereni',
-    description: 'Accompagnati dolcemente verso un sonno ristoratore e tranquillo, lasciando alle spalle le preoccupazioni.',
-    durationMinutes: 15,
-    category: 'Sonno',
-    audioFile: require('../../assets/audio/meditazione_sonno_15min.mp3'),
+    title: 'Meditation for Peaceful Sleep',
+    description: 'Gently guide yourself toward restorative and tranquil sleep, leaving worries behind.',
+    durationMinutes: 16,
+    category: 'Sleep',
+    audioFile: require('../../../assets/audio/meditationAUDIO/d.mp3'),
   },
 ];
