@@ -1,11 +1,17 @@
 import { Link } from 'expo-router';
 import React from 'react';
 import { FlatList, ImageBackground, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MEDITATIONS_DATA, Meditation } from '../../data/meditations';
+import { MEDITATIONS_DATA, Meditation } from './meditations';
 
 export default function GuidedMeditationsScreen() {
   const renderMeditationItem = ({ item }: { item: Meditation }) => (
-    <Link href={`/meditation-player/${item.id}`} asChild>
+    <Link
+      href={{
+        pathname: "/App_inApp/Meditation/meditation-player/[id]",
+        params: { id: item.id },
+      } as any}
+      asChild
+    >
       <TouchableOpacity style={styles.itemContainer}>
         <Text style={styles.itemTitle}>{item.title}</Text>
         <Text style={styles.itemDescription} numberOfLines={2}>{item.description}</Text>
@@ -17,23 +23,10 @@ export default function GuidedMeditationsScreen() {
     </Link>
   );
 
-
-  export default function <TestScreen>() {
-  const renderMeditationItem = ({ item }: { item: Meditation }) => (
-    <Link href={`/meditation-player/${item.id}`} asChild>
-      <TouchableOpacity style={styles.itemContainer}>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        <View style={styles.itemFooter}>
-          <Text style={styles.itemCategory}>{item.category}</Text>
-        </View>
-      </TouchableOpacity>
-    </Link>
-  );
-
   return (
     <SafeAreaView style={styles.safeArea}>
      <ImageBackground
-        source={require('../../assets/images/background_forest.jpg')}
+        source={require('../../../../assets/images/background_forest.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
