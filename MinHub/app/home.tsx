@@ -25,6 +25,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="App_inApp/Meditation/guided-meditations" asChild>
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Meditazioni Guidate</Text>
+            </TouchableOpacity>
+          </Link>
+
         <Link href="/App_inApp/PlantGrowth/plantGrowth" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Virtual Plant</Text>
