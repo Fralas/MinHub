@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { MEDITATIONS_DATA, Meditation } from '../meditations';
 
+
 export default function MeditationPlayerScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,6 +25,9 @@ export default function MeditationPlayerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [durationMillis, setDurationMillis] = useState<number | null>(null);
   const [positionMillis, setPositionMillis] = useState<number>(0);
+  const [isLooping, setIsLooping] = useState(false);
+  const [motivationalShown, setMotivationalShown] = useState(false);
+  const bellSound = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     const meditationDetails = MEDITATIONS_DATA.find((m: Meditation) => m.id === id);
@@ -45,11 +50,24 @@ export default function MeditationPlayerScreen() {
     return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  const loadBell = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(require('../../../../assets/audio/bell.mp3'));
+      bellSound.current = sound;
+    } catch {}
+  };
+
+  const playBell = async () => {
+    try {
+      await bellSound.current?.replayAsync();
+    } catch {}
+  };
+
   const loadSoundAsync = useCallback(async (currentMeditation: Meditation) => {
     if (!currentMeditation || !currentMeditation.audioFile) {
-        setIsLoading(false);
-        Alert.alert("Errore Audio", "File audio non specificato per questa meditazione.");
-        return null;
+      setIsLoading(false);
+      Alert.alert("Errore Audio", "File audio non specificato per questa meditazione.");
+      return null;
     }
 
     setIsLoading(true);
@@ -67,7 +85,7 @@ export default function MeditationPlayerScreen() {
       const { sound: createdSound } = await Audio.Sound.createAsync(
         currentMeditation.audioFile,
         { shouldPlay: false },
-        (playbackStatus) => {
+        async (playbackStatus) => {
           if (!playbackStatus.isLoaded) {
             if (playbackStatus.error) {
               Alert.alert("Errore Audio", `Impossibile caricare la meditazione: ${playbackStatus.error}`);
@@ -75,80 +93,131 @@ export default function MeditationPlayerScreen() {
           } else {
             setPositionMillis(playbackStatus.positionMillis);
             setDurationMillis(playbackStatus.durationMillis ?? null);
+
             if (playbackStatus.didJustFinish && !playbackStatus.isLooping) {
               setIsPlaying(false);
-              createdSound.setPositionAsync(0);
               setPositionMillis(0);
+              createdSound.setPositionAsync(0);
+              if (!motivationalShown) {
+                await playBell();
+                Alert.alert("Ben fatto", "Hai completato la meditazione!");
+                setMotivationalShown(true);
+              }
             }
           }
         }
       );
       newSoundInstance = createdSound;
-    } catch (error) {
+    } catch {
       Alert.alert("Errore Audio", "Impossibile caricare il suono.");
     } finally {
       setIsLoading(false);
     }
     return newSoundInstance;
-  }, []);
+  }, [motivationalShown]);
 
   useEffect(() => {
     let currentSound: Audio.Sound | null = null;
-
     const setupAudio = async () => {
-        if (meditation) {
-            const newLoadedSound = await loadSoundAsync(meditation);
-            if (newLoadedSound) {
-                currentSound = newLoadedSound;
-                setSound(newLoadedSound);
-            }
+      await loadBell();
+      if (meditation) {
+        const newLoadedSound = await loadSoundAsync(meditation);
+        if (newLoadedSound) {
+          currentSound = newLoadedSound;
+          setSound(newLoadedSound);
         }
+      }
     };
-
     setupAudio();
-
     return () => {
       currentSound?.unloadAsync();
+      bellSound.current?.unloadAsync();
     };
   }, [meditation, loadSoundAsync]);
 
+  useEffect(() => {
+    let interval: number;
+    if (sound && isPlaying) {
+      interval = setInterval(async () => {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded) {
+          setPositionMillis(status.positionMillis);
+          setDurationMillis(status.durationMillis ?? null);
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [sound, isPlaying]);
 
   const handlePlayPause = async () => {
     if (!sound) {
-        if(meditation) {
-            const reloadedSound = await loadSoundAsync(meditation);
-            if (reloadedSound) {
-                setSound(reloadedSound);
-                try {
-                    await reloadedSound.playAsync();
-                    setIsPlaying(true);
-                } catch(e){
-                     Alert.alert("Errore Player", "Impossibile avviare la riproduzione dopo il ricaricamento.");
-                }
-            }
+      if (meditation) {
+        const reloadedSound = await loadSoundAsync(meditation);
+        if (reloadedSound) {
+          setSound(reloadedSound);
+          try {
+            await reloadedSound.playAsync();
+            setIsPlaying(true);
+          } catch {
+            Alert.alert("Errore Player", "Impossibile avviare la riproduzione dopo il ricaricamento.");
+          }
         }
-        return;
+      }
+      return;
     }
     try {
-        const status = await sound.getStatusAsync();
-        if (!status.isLoaded) {
-            Alert.alert("Errore Player", "Suono non caricato correttamente. Riprova.");
-            await loadSoundAsync(meditation!);
-            return;
-        }
+      const status = await sound.getStatusAsync();
+      if (!status.isLoaded) {
+        Alert.alert("Errore Player", "Suono non caricato correttamente. Riprova.");
+        await loadSoundAsync(meditation!);
+        return;
+      }
 
-        if (isPlaying) {
-            await sound.pauseAsync();
+      if (isPlaying) {
+        await sound.pauseAsync();
+      } else {
+        if (status.didJustFinish) {
+          await sound.replayAsync();
         } else {
-            if (status.didJustFinish) {
-                await sound.replayAsync();
-            } else {
-                await sound.playAsync();
-            }
+          await sound.playAsync();
         }
-        setIsPlaying(!isPlaying);
-    } catch(error) {
-        Alert.alert("Errore Player", "Impossibile eseguire l'azione.");
+      }
+      setIsPlaying(!isPlaying);
+    } catch {
+      Alert.alert("Errore Player", "Impossibile eseguire l'azione.");
+    }
+  };
+
+  const handleReset = async () => {
+    if (sound) {
+      try {
+        await sound.setPositionAsync(0);
+        setPositionMillis(0);
+        setIsPlaying(false);
+      } catch {
+        Alert.alert("Errore", "Impossibile riportare all'inizio.");
+      }
+    }
+  };
+
+  const toggleLoop = async () => {
+    if (sound) {
+      try {
+        await sound.setIsLoopingAsync(!isLooping);
+        setIsLooping(!isLooping);
+      } catch {
+        Alert.alert("Errore", "Non è stato possibile cambiare la modalità loop.");
+      }
+    }
+  };
+
+  const handleSeek = async (value: number) => {
+    if (sound && durationMillis) {
+      try {
+        const newPosition = value * durationMillis;
+        await sound.setPositionAsync(newPosition);
+        setPositionMillis(newPosition);
+      } catch {}
     }
   };
 
@@ -164,7 +233,7 @@ export default function MeditationPlayerScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ title: meditation.title }} />
-       <ImageBackground
+      <ImageBackground
         source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
@@ -172,6 +241,17 @@ export default function MeditationPlayerScreen() {
         <View style={styles.container}>
           <Text style={styles.title}>{meditation.title}</Text>
           <Text style={styles.description}>{meditation.description}</Text>
+
+          <Slider
+            style={{ width: '80%', height: 40 }}
+            minimumValue={0}
+            maximumValue={1}
+            value={durationMillis ? positionMillis / durationMillis : 0}
+            minimumTrackTintColor="#FFFFFF"
+            maximumTrackTintColor="#B2DFDB"
+            thumbTintColor="#FFFFFF"
+            onSlidingComplete={handleSeek}
+          />
 
           <View style={styles.timerContainer}>
             <Text style={styles.timeText}>{formatTime(positionMillis)}</Text>
@@ -182,6 +262,16 @@ export default function MeditationPlayerScreen() {
           <TouchableOpacity onPress={handlePlayPause} style={styles.playButton}>
             <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={80} color="#FFFFFF" />
           </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', marginTop: 20 }}>
+            <TouchableOpacity onPress={handleReset} style={{ marginHorizontal: 20 }}>
+              <Ionicons name="refresh-circle" size={50} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={toggleLoop} style={{ marginHorizontal: 20 }}>
+              <Ionicons name={isLooping ? "repeat" : "repeat-outline"} size={50} color={isLooping ? "#4CAF50" : "#FFFFFF"} />
+            </TouchableOpacity>
+          </View>
         </View>
       </ImageBackground>
     </SafeAreaView>
@@ -193,7 +283,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E0F2F7',
   },
-   backgroundImage: {
+  backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
