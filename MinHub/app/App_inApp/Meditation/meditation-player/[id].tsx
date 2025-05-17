@@ -1,21 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  ImageBackground,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    ImageBackground,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import * as Progress from 'react-native-progress';
 import { MEDITATIONS_DATA, Meditation } from '../meditations';
-
 
 export default function MeditationPlayerScreen() {
   const router = useRouter();
@@ -26,8 +23,6 @@ export default function MeditationPlayerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [durationMillis, setDurationMillis] = useState<number | null>(null);
   const [positionMillis, setPositionMillis] = useState<number>(0);
-  const [breathingAnimation] = useState(new Animated.Value(0));
-
 
   useEffect(() => {
     const meditationDetails = MEDITATIONS_DATA.find((m: Meditation) => m.id === id);
@@ -50,34 +45,32 @@ export default function MeditationPlayerScreen() {
     return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  const loadSoundAsync = useCallback(async (currentMeditation: Meditation) => {
-    if (!currentMeditation || !currentMeditation.audioFile) {
+  const loadSound = useCallback(async () => {
+    if (!meditation || !meditation.audioFile) {
         setIsLoading(false);
         Alert.alert("Errore Audio", "File audio non specificato per questa meditazione.");
-        return null;
+        return;
     }
     if (sound) {
         await sound.unloadAsync();
         setSound(null);
         setIsPlaying(false);
         setPositionMillis(0);
-        setDurationMillis(null);
     }
 
     setIsLoading(true);
-    let newSoundInstance: Audio.Sound | null = null;
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         playThroughEarpieceAndroid: false,
       });
 
-      const { sound: createdSound } = await Audio.Sound.createAsync(
-        currentMeditation.audioFile,
+      const { sound: newSound, status } = await Audio.Sound.createAsync(
+        meditation.audioFile,
         { shouldPlay: false },
         (playbackStatus) => {
           if (!playbackStatus.isLoaded) {
@@ -89,85 +82,39 @@ export default function MeditationPlayerScreen() {
             setDurationMillis(playbackStatus.durationMillis ?? null);
             if (playbackStatus.didJustFinish && !playbackStatus.isLooping) {
               setIsPlaying(false);
-              createdSound.setPositionAsync(0);
+              newSound.setPositionAsync(0);
               setPositionMillis(0);
             }
           }
         }
       );
-      newSoundInstance = createdSound;
+      setSound(newSound);
     } catch (error) {
       Alert.alert("Errore Audio", "Impossibile caricare il suono.");
     } finally {
       setIsLoading(false);
     }
-    return newSoundInstance;
-  }, [sound]);
+  }, [meditation, sound]);
 
   useEffect(() => {
-    let currentSoundRef: Audio.Sound | null = null;
-    const setupAudio = async () => {
-        if (meditation) {
-            const newLoadedSound = await loadSoundAsync(meditation);
-            if (newLoadedSound) {
-                currentSoundRef = newLoadedSound;
-                setSound(newLoadedSound);
-            }
-        }
-    };
-    setupAudio();
-    return () => {
-      currentSoundRef?.unloadAsync();
-    };
-  }, [meditation, loadSoundAsync]);
-
-  useEffect(() => {
-    let animationSequence: Animated.CompositeAnimation | null = null;
-    if (isPlaying && sound) {
-      const breathDuration = 6000;
-      const inhale = Animated.timing(breathingAnimation, {
-        toValue: 1,
-        duration: breathDuration / 2,
-        useNativeDriver: true,
-      });
-      const exhale = Animated.timing(breathingAnimation, {
-        toValue: 0,
-        duration: breathDuration / 2,
-        useNativeDriver: true,
-      });
-      animationSequence = Animated.loop(Animated.sequence([inhale, exhale]));
-      animationSequence.start();
-    } else {
-      if(animationSequence) animationSequence.stop();
-      breathingAnimation.setValue(0);
+    if (meditation) {
+      loadSound();
     }
+  }, [meditation, loadSound]);
+
+  useEffect(() => {
     return () => {
-      animationSequence?.stop();
+      sound?.unloadAsync();
     };
-  }, [isPlaying, sound, breathingAnimation]);
+  }, [sound]);
 
 
   const handlePlayPause = async () => {
-    if (!sound) {
-        if(meditation) {
-            const reloadedSound = await loadSoundAsync(meditation);
-            if (reloadedSound) {
-                setSound(reloadedSound);
-                try {
-                    await reloadedSound.playAsync();
-                    setIsPlaying(true);
-                } catch(e){
-                     Alert.alert("Errore Player", "Impossibile avviare la riproduzione dopo il ricaricamento.");
-                }
-            }
-        }
-        return;
-    }
+    if (!sound) return;
     try {
         const status = await sound.getStatusAsync();
         if (!status.isLoaded) {
-            Alert.alert("Errore Player", "Suono non caricato correttamente. Riprova.");
-            await loadSoundAsync(meditation!);
+            await loadSound(); 
             return;
         }
 
@@ -195,46 +142,18 @@ export default function MeditationPlayerScreen() {
     );
   }
 
-  const animatedCircleStyle = {
-    transform: [
-      {
-        scale: breathingAnimation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.9, 1.1],
-        }),
-      },
-    ],
-    opacity: breathingAnimation.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [0.6, 1, 0.6],
-    })
-  };
-  const progress = durationMillis && durationMillis > 0 ? positionMillis / durationMillis : 0;
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ title: meditation.title }} />
        <ImageBackground
-        source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
+    source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
         <View style={styles.container}>
-          <Animated.View style={[styles.breathingCircle, animatedCircleStyle]} />
           <Text style={styles.title}>{meditation.title}</Text>
           <Text style={styles.description}>{meditation.description}</Text>
-
-          <Progress.Bar
-            progress={progress}
-            width={Dimensions.get('window').width * 0.8}
-            height={8}
-            color={"rgba(255, 255, 255, 0.7)"}
-            unfilledColor={"rgba(0, 0, 0, 0.2)"}
-            borderColor={"rgba(255, 255, 255, 0.3)"}
-            borderWidth={1}
-            borderRadius={5}
-            style={styles.progressBar}
-          />
+          
           <View style={styles.timerContainer}>
             <Text style={styles.timeText}>{formatTime(positionMillis)}</Text>
             <Text style={styles.timeText}> / </Text>
@@ -261,15 +180,10 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   loadingContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(224, 242, 247, 0.8)',
-    zIndex: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.1)'
   },
   container: {
     flex: 1,
@@ -277,13 +191,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
     backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  breathingCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    marginBottom: 40,
   },
   title: {
     fontSize: 26,
@@ -295,22 +202,17 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
     color: '#F5F5F5',
     paddingHorizontal: 10,
   },
-  progressBar: {
-    alignSelf: 'center',
-    marginVertical: 10,
-  },
   timerContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 30,
   },
   timeText: {
     fontSize: 18,
     color: '#FFFFFF',
-    fontVariant: ['tabular-nums']
   },
   playButton: {
     padding: 10,
