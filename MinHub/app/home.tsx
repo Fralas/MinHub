@@ -25,6 +25,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/PeriodTracker/periodTracker" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Period Tracker</Text>
+            </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/Meditation/guided-meditations" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Meditation</Text>
