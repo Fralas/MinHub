@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Button,
-} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import {
+  Button,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { FoodPreset, getDefaultPresets } from './foodpresets';
-import WeeklySummary from './weeklysummary';
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner';
@@ -39,6 +38,7 @@ export default function FoodScheduler() {
   const [newProtein, setNewProtein] = useState('');
   const [newFat, setNewFat] = useState('');
   const [newCalories, setNewCalories] = useState('');
+  const [presetSearch, setPresetSearch] = useState('');
 
   const PRESET_KEY = 'food_presets';
 
@@ -65,6 +65,7 @@ export default function FoodScheduler() {
     setSelectedDay(day);
     setSelectedMealType(mealType);
     setInputValue(mealPlans[day][mealType]);
+    setPresetSearch('');
     setModalVisible(true);
   };
 
@@ -134,6 +135,10 @@ export default function FoodScheduler() {
     );
   };
 
+  const filteredPresets = presets.filter(p =>
+    p.name.toLowerCase().includes(presetSearch.toLowerCase())
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -164,8 +169,6 @@ export default function FoodScheduler() {
                 </Text>
               </TouchableOpacity>
             ))}
-
-            {/* Nutrition Totals */}
             <View style={styles.nutritionRow}>
               <Text style={styles.nutritionLabel}>Total Nutrition:</Text>
               <Text style={styles.nutritionValue}>
@@ -179,8 +182,6 @@ export default function FoodScheduler() {
         )}
       />
 
-      <WeeklySummary weeklyTotals={getWeeklyTotals()} />
-
       {/* Edit Meal Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
@@ -191,6 +192,28 @@ export default function FoodScheduler() {
               placeholder="Enter meal (e.g., Chicken Salad)"
               value={inputValue}
               onChangeText={setInputValue}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Search presets..."
+              value={presetSearch}
+              onChangeText={setPresetSearch}
+            />
+            <FlatList
+              data={filteredPresets}
+              keyExtractor={(item) => item.name}
+              style={{ maxHeight: 150 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.presetItem}
+                  onPress={() => setInputValue(item.name)}
+                >
+                  <Text>{item.name}</Text>
+                  <Text style={styles.presetDetails}>
+                    {item.carbs}g C | {item.protein}g P | {item.fat}g F | {item.calories} cal
+                  </Text>
+                </TouchableOpacity>
+              )}
             />
             <Button title="Save" onPress={saveMeal} />
             <Button title="Cancel" onPress={() => setModalVisible(false)} color="#aaa" />
@@ -333,5 +356,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
+  },
+  presetItem: {
+    paddingVertical: 8,
+    borderBottomColor: '#eee',
+    borderBottomWidth: 1,
+  },
+  presetDetails: {
+    fontSize: 12,
+    color: '#666',
   },
 });
