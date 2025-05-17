@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, Stack } from 'expo-router';
 import React from 'react';
 import { FlatList, ImageBackground, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MEDITATIONS_DATA, Meditation } from './meditations';
@@ -9,7 +9,7 @@ export default function GuidedMeditationsScreen() {
       href={{
         pathname: "/App_inApp/Meditation/meditation-player/[id]",
         params: { id: item.id },
-      } as any}
+      }}
       asChild
     >
       <TouchableOpacity style={styles.itemContainer}>
@@ -25,8 +25,9 @@ export default function GuidedMeditationsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+     <Stack.Screen options={{title: "Meditazioni Guidate"}} />
      <ImageBackground
-        source={require('../../../assets/images/meditationIMG/background_forest.jpg')}
+        source={require('../../../../assets/images/meditationIMG/background_forest.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -102,5 +103,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
     overflow: 'hidden',
+    textTransform: 'capitalize'
   },
 });

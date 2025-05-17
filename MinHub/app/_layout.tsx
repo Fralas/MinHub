@@ -16,7 +16,11 @@ export default function AppLayout() {
     >
       <Stack.Screen
         name="index"
-        options={{ title: 'App Meditazione' }}
+        options={{ title: 'MinHub', headerShown: false }}
+      />
+      <Stack.Screen
+        name="home"
+        options={{ title: 'MinHub Home' }}
       />
       <Stack.Screen
         name="App_inApp/Meditation/guided-meditations"
