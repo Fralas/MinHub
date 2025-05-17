@@ -27,7 +27,7 @@ export default function HomeScreen() {
 
         <Link href="/App_inApp/PeriodTracker/periodTracker" asChild>
           <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Monitor Ciclo</Text>
+            <Text style={styles.iconText}>Period Tracker</Text>
             </TouchableOpacity>
         </Link>
 
