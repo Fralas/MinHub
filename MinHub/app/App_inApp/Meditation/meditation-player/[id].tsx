@@ -3,14 +3,14 @@ import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ImageBackground,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { MEDITATIONS_DATA, Meditation } from '../meditations';
 
@@ -45,20 +45,15 @@ export default function MeditationPlayerScreen() {
     return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  const loadSound = useCallback(async () => {
-    if (!meditation || !meditation.audioFile) {
+  const loadSoundAsync = useCallback(async (currentMeditation: Meditation) => {
+    if (!currentMeditation || !currentMeditation.audioFile) {
         setIsLoading(false);
         Alert.alert("Errore Audio", "File audio non specificato per questa meditazione.");
-        return;
-    }
-    if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlaying(false);
-        setPositionMillis(0);
+        return null;
     }
 
     setIsLoading(true);
+    let newSoundInstance: Audio.Sound | null = null;
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -69,8 +64,8 @@ export default function MeditationPlayerScreen() {
         playThroughEarpieceAndroid: false,
       });
 
-      const { sound: newSound, status } = await Audio.Sound.createAsync(
-        meditation.audioFile,
+      const { sound: createdSound } = await Audio.Sound.createAsync(
+        currentMeditation.audioFile,
         { shouldPlay: false },
         (playbackStatus) => {
           if (!playbackStatus.isLoaded) {
@@ -82,39 +77,63 @@ export default function MeditationPlayerScreen() {
             setDurationMillis(playbackStatus.durationMillis ?? null);
             if (playbackStatus.didJustFinish && !playbackStatus.isLooping) {
               setIsPlaying(false);
-              newSound.setPositionAsync(0);
+              createdSound.setPositionAsync(0);
               setPositionMillis(0);
             }
           }
         }
       );
-      setSound(newSound);
+      newSoundInstance = createdSound;
     } catch (error) {
       Alert.alert("Errore Audio", "Impossibile caricare il suono.");
     } finally {
       setIsLoading(false);
     }
-  }, [meditation, sound]);
+    return newSoundInstance;
+  }, []);
 
   useEffect(() => {
-    if (meditation) {
-      loadSound();
-    }
-  }, [meditation, loadSound]);
+    let currentSound: Audio.Sound | null = null;
 
-  useEffect(() => {
-    return () => {
-      sound?.unloadAsync();
+    const setupAudio = async () => {
+        if (meditation) {
+            const newLoadedSound = await loadSoundAsync(meditation);
+            if (newLoadedSound) {
+                currentSound = newLoadedSound;
+                setSound(newLoadedSound);
+            }
+        }
     };
-  }, [sound]);
+
+    setupAudio();
+
+    return () => {
+      currentSound?.unloadAsync();
+    };
+  }, [meditation, loadSoundAsync]);
 
 
   const handlePlayPause = async () => {
-    if (!sound) return;
+    if (!sound) {
+        if(meditation) {
+            const reloadedSound = await loadSoundAsync(meditation);
+            if (reloadedSound) {
+                setSound(reloadedSound);
+                try {
+                    await reloadedSound.playAsync();
+                    setIsPlaying(true);
+                } catch(e){
+                     Alert.alert("Errore Player", "Impossibile avviare la riproduzione dopo il ricaricamento.");
+                }
+            }
+        }
+        return;
+    }
     try {
         const status = await sound.getStatusAsync();
         if (!status.isLoaded) {
-            await loadSound(); 
+            Alert.alert("Errore Player", "Suono non caricato correttamente. Riprova.");
+            await loadSoundAsync(meditation!);
             return;
         }
 
@@ -146,14 +165,14 @@ export default function MeditationPlayerScreen() {
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ title: meditation.title }} />
        <ImageBackground
-    source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
+        source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
         <View style={styles.container}>
           <Text style={styles.title}>{meditation.title}</Text>
           <Text style={styles.description}>{meditation.description}</Text>
-          
+
           <View style={styles.timerContainer}>
             <Text style={styles.timeText}>{formatTime(positionMillis)}</Text>
             <Text style={styles.timeText}> / </Text>
@@ -180,10 +199,15 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.1)'
+    justifyContent: 'center',
+    backgroundColor: 'rgba(224, 242, 247, 0.8)',
+    zIndex: 10,
   },
   container: {
     flex: 1,
