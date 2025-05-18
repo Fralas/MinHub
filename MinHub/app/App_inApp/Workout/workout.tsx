@@ -1,275 +1,258 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
-  Modal,
   TextInput,
-  Button,
+  TouchableOpacity,
   FlatList,
+  Modal,
   StyleSheet,
-} from 'react-native';
-
-type ExercisePreset = {
-  name: string;
-  sets: number;
-  reps: number;
-  duration: number; // in seconds,
-};
+  ScrollView,
+  Platform,
+} from "react-native";
+import { exercises, Exercise } from "./exerciseData"; // importa da exerciseData.tsx
+import DropDownPicker from "react-native-dropdown-picker";
+import { Ionicons } from "@expo/vector-icons";
 
 type WorkoutPlan = {
+  id: number;
   name: string;
-  exercises: string[]; 
+  exercises: Exercise[];
+  durationSeconds: number; // duration for the entire workout plan
 };
 
-const WORKOUT_KEY = 'workout_plans';
-const EXERCISE_PRESET_KEY = 'exercise_presets';
-
-export default function WorkoutScheduler() {
-  const [workouts, setWorkouts] = useState<WorkoutPlan[]>([]);
-  const [exercisePresets, setExercisePresets] = useState<ExercisePreset[]>([]);
-
+export default function WorkoutPlansScreen() {
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [newWorkoutName, setNewWorkoutName] = useState('');
+  const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
-  const [search, setSearch] = useState('');
+  const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
+  const [durationInput, setDurationInput] = useState(""); // input for workout duration in minutes
+  const [nextId, setNextId] = useState(1);
 
-  const [addPresetModalVisible, setAddPresetModalVisible] = useState(false);
-  const [newExerciseName, setNewExerciseName] = useState('');
-  const [newSets, setNewSets] = useState('');
-  const [newReps, setNewReps] = useState('');
-  const [newDuration, setNewDuration] = useState('');
+  const exerciseOptions = exercises.map((exercise) => ({
+    label: exercise.name,
+    value: exercise.name,
+  }));
 
-  useEffect(() => {
-    const loadData = async () => {
-      const savedWorkouts = await AsyncStorage.getItem(WORKOUT_KEY);
-      if (savedWorkouts) setWorkouts(JSON.parse(savedWorkouts));
-
-      const savedPresets = await AsyncStorage.getItem(EXERCISE_PRESET_KEY);
-      if (savedPresets) setExercisePresets(JSON.parse(savedPresets));
-    };
-    loadData();
-  }, []);
-
-  const saveWorkouts = async (data: WorkoutPlan[]) => {
-    setWorkouts(data);
-    await AsyncStorage.setItem(WORKOUT_KEY, JSON.stringify(data));
+  // Calculate total kcal burned for a plan (sum kcal/min * duration in minutes)
+  const calculateTotalCalories = (plan: WorkoutPlan) => {
+    const totalKcalPerMinute = plan.exercises.reduce(
+      (sum, ex) => sum + ex.kcalBurned,
+      0
+    );
+    return (totalKcalPerMinute * plan.durationSeconds) / 60;
   };
 
-  const savePresets = async (data: ExercisePreset[]) => {
-    setExercisePresets(data);
-    await AsyncStorage.setItem(EXERCISE_PRESET_KEY, JSON.stringify(data));
-  };
+  const handleCreatePlan = () => {
+    if (!planName || selectedExercises.length === 0) return;
 
-  const addWorkout = () => {
-    if (!newWorkoutName.trim()) return;
+    const durationSecondsNum = parseInt(durationInput, 10) * 60;
+    if (isNaN(durationSecondsNum) || durationSecondsNum <= 0) return;
+
+    const chosenExercises = exercises.filter((ex) =>
+      selectedExercises.includes(ex.name)
+    );
+
     const newPlan: WorkoutPlan = {
-      name: newWorkoutName.trim(),
-      exercises: selectedExercises,
+      id: nextId,
+      name: planName,
+      exercises: chosenExercises,
+      durationSeconds: durationSecondsNum,
     };
-    const updated = [...workouts, newPlan];
-    saveWorkouts(updated);
-    setNewWorkoutName('');
+
+    setWorkoutPlans((prev) => [...prev, newPlan]);
+    setNextId((prev) => prev + 1);
+    setPlanName("");
     setSelectedExercises([]);
+    setDurationInput("");
     setModalVisible(false);
   };
 
-  const addPreset = () => {
-    if (!newExerciseName.trim()) return;
-    const preset: ExercisePreset = {
-      name: newExerciseName.trim(),
-      sets: parseInt(newSets) || 0,
-      reps: parseInt(newReps) || 0,
-      duration: parseInt(newDuration) || 0,
-    };
-    const updated = [...exercisePresets, preset];
-    savePresets(updated);
-    setNewExerciseName('');
-    setNewSets('');
-    setNewReps('');
-    setNewDuration('');
-    setAddPresetModalVisible(false);
-  };
-
-  const toggleExerciseSelection = (exercise: string) => {
-    setSelectedExercises((prev) =>
-      prev.includes(exercise) ? prev.filter(e => e !== exercise) : [...prev, exercise]
-    );
-  };
-
-  const filteredPresets = exercisePresets.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Workout Planner</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
-      </View>
-
       <FlatList
-        data={workouts}
-        keyExtractor={(item) => item.name}
+        data={workoutPlans}
+        keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.workoutTitle}>{item.name}</Text>
-            {item.exercises.map((exercise) => {
-              const preset = exercisePresets.find(p => p.name === exercise);
-              return (
-                <Text key={exercise} style={styles.exerciseText}>
-                  {preset
-                    ? `${preset.name} - ${preset.sets}x${preset.reps} (${preset.duration}s)`
-                    : exercise}
-                </Text>
-              );
-            })}
+          <View style={styles.planContainer}>
+            <Text style={styles.planTitle}>{item.name}</Text>
+            <Text style={styles.durationText}>
+              Duration: {(item.durationSeconds / 60).toFixed(1)} min
+            </Text>
+            <Text style={styles.caloriesText}>
+              Estimated Calories Burned: {calculateTotalCalories(item).toFixed(2)} kcal
+            </Text>
+            {item.exercises.map((exercise, index) => (
+              <Text key={index} style={styles.exerciseText}>
+                • {exercise.name}
+              </Text>
+            ))}
           </View>
         )}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No workout plans created yet.</Text>
+        }
       />
 
-      {/* Add Workout Modal */}
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Ionicons name="add" size={30} color="white" />
+      </TouchableOpacity>
+
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Workout</Text>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create Workout Plan</Text>
             <TextInput
+              placeholder="Plan Name"
               style={styles.input}
-              placeholder="Workout name"
-              value={newWorkoutName}
-              onChangeText={setNewWorkoutName}
+              value={planName}
+              onChangeText={setPlanName}
             />
+
             <TextInput
+              placeholder="Duration (minutes)"
               style={styles.input}
-              placeholder="Search exercises..."
-              value={search}
-              onChangeText={setSearch}
+              value={durationInput}
+              onChangeText={setDurationInput}
+              keyboardType="numeric"
             />
-            <FlatList
-              data={filteredPresets}
-              keyExtractor={(item) => item.name}
-              style={{ maxHeight: 150 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => toggleExerciseSelection(item.name)}
-                  style={[
-                    styles.presetItem,
-                    selectedExercises.includes(item.name) && { backgroundColor: '#d1ecf1' },
-                  ]}
-                >
-                  <Text>{item.name}</Text>
-                  <Text style={styles.presetDetails}>
-                    {item.sets}x{item.reps} | {item.duration}s
-                  </Text>
-                </TouchableOpacity>
-              )}
+
+            <DropDownPicker
+              open={exercisePickerOpen}
+              setOpen={setExercisePickerOpen}
+              value={selectedExercises}
+              setValue={setSelectedExercises}
+              items={exerciseOptions}
+              multiple={true}
+              min={0}
+              max={10}
+              placeholder="Select Exercises"
+              style={styles.dropdown}
+              dropDownContainerStyle={{ zIndex: 999 }}
+              zIndex={999}
+              zIndexInverse={500}
             />
-            <Button title="Create Workout" onPress={addWorkout} />
-            <Button title="Cancel" onPress={() => setModalVisible(false)} color="#aaa" />
-          </View>
+
+            <TouchableOpacity style={styles.saveButton} onPress={handleCreatePlan}>
+              <Text style={styles.saveButtonText}>Save Plan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </Modal>
-
-      {/* Add Preset Modal */}
-      <Modal visible={addPresetModalVisible} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Exercise Preset</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Exercise name"
-              value={newExerciseName}
-              onChangeText={setNewExerciseName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Sets"
-              keyboardType="numeric"
-              value={newSets}
-              onChangeText={setNewSets}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Reps"
-              keyboardType="numeric"
-              value={newReps}
-              onChangeText={setNewReps}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Duration (sec)"
-              keyboardType="numeric"
-              value={newDuration}
-              onChangeText={setNewDuration}
-            />
-            <Button title="Add Exercise" onPress={addPreset} />
-            <Button title="Cancel" onPress={() => setAddPresetModalVisible(false)} color="#aaa" />
-          </View>
-        </View>
-      </Modal>
-
-      <TouchableOpacity
-        style={[styles.addButton, { marginTop: 10, alignSelf: 'center' }]}
-        onPress={() => setAddPresetModalVisible(true)}
-      >
-        <Text style={styles.addButtonText}>Add Exercise Preset</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#2c3e50' },
-  addButton: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  addButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  card: {
-    backgroundColor: '#ecf0f1',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-  workoutTitle: { fontSize: 20, fontWeight: '600', marginBottom: 10 },
-  exerciseText: { fontSize: 14, color: '#34495e', marginLeft: 10 },
-  modalContainer: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: 20,
+    paddingTop: 60,
+    paddingHorizontal: 16,
+    backgroundColor: "#f5f5f5",
   },
-  modalContent: {
-    backgroundColor: '#fff',
+  planContainer: {
+    backgroundColor: "white",
+    padding: 16,
     borderRadius: 10,
-    padding: 20,
+    marginBottom: 12,
+    elevation: 3,
+  },
+  planTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  durationText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  caloriesText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+    color: "#d9534f",
+  },
+  exerciseText: {
+    fontSize: 14,
+    marginLeft: 8,
+    color: "#333",
+  },
+  addButton: {
+    backgroundColor: "#4CAF50",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    bottom: Platform.OS === "android" ? 80 : 40,
+    right: 20,
     elevation: 5,
   },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 10 },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#000000aa",
+    justifyContent: "center",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    padding: 24,
+    borderRadius: 12,
+    marginHorizontal: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 16,
+    textAlign: "center",
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ccc",
     borderRadius: 8,
     padding: 10,
+    marginBottom: 16,
+  },
+  dropdown: {
+    marginBottom: 16,
+    borderColor: "#ccc",
+    borderRadius: 8,
+  },
+  saveButton: {
+    backgroundColor: "#4CAF50",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
     marginBottom: 10,
   },
-  presetItem: {
-    paddingVertical: 8,
-    borderBottomColor: '#eee',
-    borderBottomWidth: 1,
+  saveButtonText: {
+    color: "white",
+    fontSize: 16,
   },
-  presetDetails: {
-    fontSize: 12,
-    color: '#666',
+  cancelButton: {
+    alignItems: "center",
+    padding: 10,
+  },
+  cancelButtonText: {
+    color: "#888",
+    fontSize: 16,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#999",
+    marginTop: 20,
+    fontSize: 16,
   },
 });
