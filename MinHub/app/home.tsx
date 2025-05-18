@@ -1,12 +1,12 @@
 import { Link } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>MinHub Home</Text>
-      <View style={styles.iconContainer}>
+      <ScrollView contentContainerStyle={styles.iconContainer}>
         <Link href="/App_inApp/ToDoList/toDoList" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Todo List</Text>
@@ -28,7 +28,7 @@ export default function HomeScreen() {
         <Link href="/App_inApp/PeriodTracker/periodTracker" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Period Tracker</Text>
-            </TouchableOpacity>
+          </TouchableOpacity>
         </Link>
 
         <Link href="/App_inApp/Meditation/guided-meditations" asChild>
@@ -85,16 +85,16 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
-
         <Link href="/App_inApp/Pomodoro/pomodoro" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Pomostudy</Text>
           </TouchableOpacity>
         </Link>
-      </View>
+      </ScrollView>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -110,12 +110,14 @@ const styles = StyleSheet.create({
     marginBottom: 50,
     color: '#2c3e50',
   },
+
   iconContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '95%',
     flexWrap: 'wrap',
+    paddingBottom: 100,
   },
+  
   iconButton: {
     alignItems: 'center',
     justifyContent: 'center',
