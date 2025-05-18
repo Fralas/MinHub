@@ -1,22 +1,22 @@
-#Prerequisites
+# Prerequisites
 Before getting started, make sure you have the following installed:
 1. Node.js (LTS Version) 
 
-###2. Android Studio  (Check android emulator setup step during installation)
+### 2. Android Studio  (Check android emulator setup step during installation)
 
-###3.  Git
+### 3.  Git
 
-###4. Expo CLI
+### 4. Expo CLI
 Install globally:
 npm install -g expo-cli
 
-###Verify installation:
+### Verify installation:
 expo --version
 Clone the repo
 git clone https://github.com/Fralas/MinHub.git
 
 
-##Android Emulator Setup
+## Android Emulator Setup
 1. To run the app without a real device
 During android studio setup, select Android Virtual Device (AVD).
 
@@ -34,7 +34,7 @@ Once created, click the Play icon next to your virtual device.
 
 
 
-##Install Dependencies
+## Install Dependencies
 
 Inside the project directory (MinHub/Minhub) run the following command:
 
@@ -46,7 +46,7 @@ To check which modules the app uses run:
 npm ls
 
 
-##Run App
+## Run App
 
 
 1. Make sure the emulator is active and running
@@ -63,7 +63,7 @@ Press “a” to launch the android emulator (Suggested)
 Press “w” to run in a web browser 
 Scan the QR code with the “Expo GO” app on a physical device
 
-###Notes on storage
+### Notes on storage
 
 The app uses AsyncStorage for persistent storage.
 
@@ -72,21 +72,21 @@ Files are managed with expo-file-system (if applicable).
 No need for backend setup for now — data is saved locally.
 
 
-##Useful Commands
+## Useful Commands
 
-###Clean Cache:
+### Clean Cache:
 expo start -c
 
 
-###List of installed emulators: 
+### List of installed emulators: 
 emulator -list-avds
 
 
-###Run Emulator if using a different setup: 
+### Run Emulator if using a different setup: 
 emulator -avd device_name
 
   
-###Useful .bat file for autostart of emulator and expo: 
+### Useful .bat file for autostart of emulator and expo: 
 @echo off
 echo Starting android emulator in a new window
 start "Android emulator" cmd /k emulator -avd device_name 
@@ -95,17 +95,17 @@ start "Android emulator" cmd /k emulator -avd device_name
 echo Starting expo in a new window
 start "Expo Start" cmd /k npx expo start --android
 
-##Troubleshooting
+## Troubleshooting
 
-###Metro bundler stuck?
+### Metro bundler stuck?
 Close all terminals and run 
 expo start -c.
 
 
 
-###App not installing on emulator?
+### App not installing on emulator?
 Make sure the emulator is running before pressing a in Expo.
 
-###Missing modules?
+### Missing modules?
 Run  npm install again or check package.json.
 
