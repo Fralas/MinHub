@@ -1,77 +1,97 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  FlatList,
 } from "react-native";
 
 export default function Countdown() {
-  const [inputTime, setInputTime] = useState(""); 
-  const [seconds, setSeconds] = useState(0);
+  const [inputMinutes, setInputMinutes] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    
-  useEffect(() => {
-    if (isRunning && seconds > 0) {
-      intervalRef.current = setInterval(() => {
-        setSeconds((prev) => prev - 1);
-      }, 1000);
-    } else if (seconds === 0) {
-      clearInterval(intervalRef.current!);
-      setIsRunning(false);
-    }
 
-    return () => clearInterval(intervalRef.current!);
-  }, [isRunning, seconds]);
+  const [presets, setPresets] = useState<number[]>([60, 300, 600]); // default: 1m, 5m, 10m
 
-  const start = () => {
-    const time = parseInt(inputTime, 10);
-    if (!isRunning && time > 0) {
-      setSeconds(time);
-      setIsRunning(true);
+  const startCountdown = (duration: number) => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setSecondsLeft(duration);
+    setIsRunning(true);
+
+    intervalRef.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalRef.current!);
+          setIsRunning(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleStart = () => {
+    const seconds = parseInt(inputMinutes) * 60;
+    if (!isNaN(seconds) && seconds > 0) {
+      startCountdown(seconds);
     }
   };
 
-  const pause = () => {
-    setIsRunning(false);
-    clearInterval(intervalRef.current!);
+  const handleAddPreset = () => {
+    const seconds = parseInt(inputMinutes) * 60;
+    if (!isNaN(seconds) && seconds > 0 && !presets.includes(seconds)) {
+      setPresets((prev) => [...prev, seconds]);
+      setInputMinutes("");
+    }
   };
 
-  const reset = () => {
-    setIsRunning(false);
-    clearInterval(intervalRef.current!);
-    setSeconds(0);
-    setInputTime("");
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Countdown Timer</Text>
+      <Text style={styles.timerText}>{formatTime(secondsLeft)}</Text>
 
       <TextInput
-        placeholder="Enter time in seconds"
+        placeholder="Minutes"
+        value={inputMinutes}
+        onChangeText={setInputMinutes}
         keyboardType="numeric"
         style={styles.input}
-        value={inputTime}
-        onChangeText={setInputTime}
-        editable={!isRunning}
       />
 
-      <Text style={styles.timerText}>{seconds}s</Text>
-
-      <View style={styles.buttons}>
-        <TouchableOpacity onPress={start} style={styles.button}>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={styles.button} onPress={handleStart}>
           <Text style={styles.buttonText}>Start</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={pause} style={styles.button}>
-          <Text style={styles.buttonText}>Pause</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={reset} style={styles.button}>
-          <Text style={styles.buttonText}>Reset</Text>
+
+        <TouchableOpacity style={styles.button} onPress={handleAddPreset}>
+          <Text style={styles.buttonText}>Add Preset</Text>
         </TouchableOpacity>
       </View>
+
+      <Text style={styles.subtitle}>Presets</Text>
+      <FlatList
+        data={presets}
+        keyExtractor={(item) => item.toString()}
+        horizontal
+        contentContainerStyle={styles.presetList}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.presetButton}
+            onPress={() => startCountdown(item)}
+          >
+            <Text style={styles.presetText}>{Math.floor(item / 60)} min</Text>
+          </TouchableOpacity>
+        )}
+      />
     </View>
   );
 }
@@ -79,43 +99,64 @@ export default function Countdown() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 24,
     justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 20,
+    backgroundColor: "#f5f5f5",
   },
   title: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  timerText: {
+    fontSize: 48,
+    textAlign: "center",
+    marginVertical: 24,
+    fontWeight: "600",
   },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 8,
     padding: 10,
-    width: 200,
-    marginBottom: 20,
-    textAlign: "center",
+    marginBottom: 16,
+    fontSize: 18,
   },
-  timerText: {
-    fontSize: 48,
-    fontWeight: "bold",
-    marginBottom: 30,
-  },
-  buttons: {
+  buttonRow: {
     flexDirection: "row",
-    gap: 16,
+    justifyContent: "space-between",
+    marginBottom: 24,
   },
   button: {
-    backgroundColor: "#4CAF50",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    flex: 1,
     marginHorizontal: 5,
+    backgroundColor: "#4CAF50",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
   },
   buttonText: {
-    color: "#fff",
+    color: "white",
+    fontSize: 16,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  presetList: {
+    gap: 10,
+  },
+  presetButton: {
+    backgroundColor: "#2196F3",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  presetText: {
+    color: "white",
     fontSize: 16,
   },
 });
