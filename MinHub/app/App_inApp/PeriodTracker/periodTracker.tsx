@@ -1,7 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+
 import { formatDateToYYYYMMDD, getAverageCycleLength, getAveragePeriodLength } from '../../utils/cycleLogic';
 import { loadPeriods, loadSettings, savePeriods, saveSettings } from '../../utils/cycleStore';
 import { CycleSettings, DailyLog, FlowIntensity, Mood, PeriodData, Symptom } from '../../utils/cycleTypes';
@@ -24,37 +27,14 @@ export default function PeriodTrackerScreen() {
   const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
         const loadedPeriodsData = await loadPeriods();
         const loadedSettingsData = await loadSettings();
 
         const newAvgCycle = getAverageCycleLength(loadedPeriodsData);
         const newAvgPeriod = getAveragePeriodLength(loadedPeriodsData);
 
-        let finalSettings = loadedSettingsData;
-        if ((newAvgCycle !== loadedSettingsData.averageCycleLength && newAvgCycle > 0) || (newAvgPeriod !== loadedSettingsData.averagePeriodLength && newAvgPeriod > 0) ) {
-            finalSettings = { 
-                averageCycleLength: newAvgCycle || defaultInitialSettings.averageCycleLength, 
-                averagePeriodLength: newAvgPeriod || defaultInitialSettings.averagePeriodLength 
-            };
-            await saveSettings(finalSettings);
-        }
-
-        setSettings(finalSettings);
-        const sortedPeriods = [...loadedPeriodsData].sort((a, b) => 
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-        );
-        setPeriods(sortedPeriods);
-        const active = sortedPeriods.find(p => p.endDate === null);
-        setCurrentActivePeriod(active || null);
-    } catch (error) {
-        Alert.alert("Errore", "Impossibile caricare i dati del ciclo");
-    } finally {
-        setIsLoading(false);
-    }
-  }, []);}
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
 
 interface DailyLog {
   date: string;
@@ -73,6 +53,9 @@ interface CycleSettings {
   averagePeriodLength: number;
 }
 
+type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
+
+
 const formatDateToYYYYMMDD = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -88,44 +71,38 @@ const calculateAverage = (values: number[]): number => {
 
 const getAverageCycleLength = (periods: PeriodData[]): number => {
   if (periods.length < 2) return 28;
-  
   const cycleLengths: number[] = [];
-  
-  for (let i = 0; i < periods.length - 1; i++) {
-    const current = periods[i];
-    const next = periods[i + 1];
-    
-    if (current.endDate && next.endDate) {
-      const currentEnd = new Date(current.endDate);
-      const nextStart = new Date(next.startDate);
-      const diffDays = Math.round((nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays > 0) {
-        cycleLengths.push(diffDays);
+  const sortedPeriods = [...periods].sort((a,b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  for (let i = 0; i < sortedPeriods.length - 1; i++) {
+      const currentCycleStartDate = new Date(sortedPeriods[i].startDate);
+      const nextCycleStartDate = new Date(sortedPeriods[i + 1].startDate);
+      const diffTime = Math.abs(nextCycleStartDate.getTime() - currentCycleStartDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays > 15 && diffDays < 60) {
+          cycleLengths.push(diffDays);
       }
-    }
   }
-  
   return calculateAverage(cycleLengths) || 28;
 };
 
 const getAveragePeriodLength = (periods: PeriodData[]): number => {
   const periodLengths: number[] = [];
-  
   periods.forEach(period => {
     if (period.endDate) {
       const start = new Date(period.startDate);
       const end = new Date(period.endDate);
-      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      periodLengths.push(diffDays);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+       if (diffDays > 0 && diffDays < 15) {
+          periodLengths.push(diffDays);
+      }
     }
   });
-  
   return calculateAverage(periodLengths) || 5;
 };
 
-const PERIODS_KEY = 'periodTracker_periods';
-const SETTINGS_KEY = 'periodTracker_settings';
+const PERIODS_KEY = '@periodTracker_periods_v_mix';
+const SETTINGS_KEY = '@periodTracker_settings_v_mix';
 
 const loadPeriods = async (): Promise<PeriodData[]> => {
   try {
@@ -163,215 +140,113 @@ const saveSettings = async (settings: CycleSettings): Promise<void> => {
   }
 };
 
-const PeriodTrackerScreen = () => {
+
+export default function PeriodTrackerScreen() {
+  const router = useRouter();
   const [periods, setPeriods] = useState<PeriodData[]>([]);
   const [settings, setSettings] = useState<CycleSettings>({ averageCycleLength: 28, averagePeriodLength: 5 });
   const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
-  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | null>(null);
 
-  const fetchData = useCallback(async () => {
+
+  const fetchDataInternal = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedPeriods, loadedSettings] = await Promise.all([
-        loadPeriods(),
-        loadSettings()
-      ]);
-      
-      const newAvgCycle = getAverageCycleLength(loadedPeriods);
-      const newAvgPeriod = getAveragePeriodLength(loadedPeriods);
+        const [loadedPeriodsData, loadedSettingsData] = await Promise.all([
+            loadPeriods(),
+            loadSettings()
+        ]);
+        
+        const newAvgCycle = getAverageCycleLength(loadedPeriodsData);
+        const newAvgPeriod = getAveragePeriodLength(loadedPeriodsData);
 
-      const finalSettings = {
-        averageCycleLength: newAvgCycle,
-        averagePeriodLength: newAvgPeriod
-      };
-      
-      await saveSettings(finalSettings);
-      setSettings(finalSettings);
-      
-      const sortedPeriods = [...loadedPeriods].sort((a, b) => 
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-      );
-      
-      setPeriods(sortedPeriods);
-      setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
+        let finalSettings = loadedSettingsData;
+        if (newAvgCycle !== loadedSettingsData.averageCycleLength || newAvgPeriod !== loadedSettingsData.averagePeriodLength ) {
+            finalSettings = { 
+                averageCycleLength: newAvgCycle || 28, 
+                averagePeriodLength: newAvgPeriod || 5
+            };
+            await saveSettings(finalSettings);
+        }
+        
+        setSettings(finalSettings);
+        const sortedPeriods = [...loadedPeriodsData].sort((a, b) => 
+            new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        );
+        setPeriods(sortedPeriods);
+        setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
     } catch (error) {
-      Alert.alert("Error", "Failed to load cycle data");
+        Alert.alert("Errore", "Impossibile caricare i dati del ciclo");
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-      
-      const fetchDataWrapper = async () => {
-        try {
-          await fetchData();
-        } catch (error) {
-          if (isActive) {
-            Alert.alert("Error", "Failed to load data");
-          }
-        }
-      };
+  useFocusEffect(fetchDataInternal);
 
-      fetchDataWrapper();
-
-      return () => {
-        isActive = false;
-      };
-    }, [fetchData])
-  );
-
-  const showDatePicker = (mode: 'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate', periodId?: string) => {
+  const showDatePicker = (mode: 'startPeriod' | 'endPeriod') => {
     setDatePickerTarget(mode);
-    if (periodId) setEditingPeriodId(periodId);
     setSelectedDate(new Date());
     setDatePickerVisible(true);
   };
 
   const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
-    if (event.type === 'dismissed') {
-      setDatePickerVisible(false);
-      return;
-    }
+    const currentTarget = datePickerTarget; 
+    setDatePickerVisible(Platform.OS === 'ios');
 
-    if (!date || !datePickerTarget) return;
-    
-    const dateStr = formatDateToYYYYMMDD(date);
-    let updatedPeriods = [...periods];
+    if (event.type === 'set' && date && currentTarget) {
+        const dateStr = formatDateToYYYYMMDD(date);
+        let updatedPeriods = [...periods];
+        let needsSave = false;
 
-    try {
-      switch (datePickerTarget) {
-        case 'startPeriod':
-          if (!currentActivePeriod) {
-            const newPeriod: PeriodData = {
-              id: Date.now().toString(),
-              startDate: dateStr,
-              endDate: null,
-              dailyLogs: []
-            };
-            updatedPeriods = [newPeriod, ...periods];
-            setCurrentActivePeriod(newPeriod);
-          }
-          break;
-
-        case 'endPeriod':
-          if (currentActivePeriod) {
-            updatedPeriods = periods.map(p => 
-              p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
-            );
-            setCurrentActivePeriod(null);
-          }
-          break;
-
-        case 'editStartDate':
-          updatedPeriods = periods.map(p => 
-            p.id === editingPeriodId ? { ...p, startDate: dateStr } : p
-          );
-          break;
-
-        case 'editEndDate':
-          updatedPeriods = periods.map(p => 
-            p.id === editingPeriodId ? { ...p, endDate: dateStr } : p
-          );
-          break;
-      }
-
-       if (mode === 'startPeriod') {
-      if (currentActivePeriod) {
-        Alert.alert("Ciclo Attivo", "C'è già un ciclo attivo.");
-      } else {
-        const newPeriod: PeriodData = { 
-          id: Date.now().toString(), 
-          startDate: newDateString, 
-          endDate: null,
-          dailyLogs: [{date: newDateString}] 
-        };
-        updatedPeriods = [newPeriod, ...periods];
-        setCurrentActivePeriod(newPeriod);
-        activePeriodNeedsUpdate = true;
-      }
-    } else if (mode === 'endPeriod' && currentActivePeriod) {
-      if (new Date(newDateString) < new Date(currentActivePeriod.startDate)) {
-          Alert.alert("Data non valida", "La data di fine non può essere precedente alla data di inizio.");
-      } else {
-          updatedPeriods = periods.map(p => p.id === currentActivePeriod.id ? { ...p, endDate: newDateString } : p);
-          setCurrentActivePeriod(null);
-          activePeriodNeedsUpdate = true;
-      }
-    } else if (mode === 'editStartDate' && periodIdBeingEdited) {
-        const periodIndex = updatedPeriods.findIndex(p=> p.id === periodIdBeingEdited);
-        if (periodIndex > -1) {
-            if (updatedPeriods[periodIndex].endDate && new Date(newDateString) > new Date(updatedPeriods[periodIndex].endDate!)) {
-                 Alert.alert("Data non valida", "La data di inizio non può essere successiva alla data di fine.");
+        if (currentTarget === 'startPeriod') {
+            if (currentActivePeriod) {
+                Alert.alert("Ciclo Attivo", "C'è già un ciclo attivo.");
             } else {
-                updatedPeriods[periodIndex] = {...updatedPeriods[periodIndex], startDate: newDateString};
-                activePeriodNeedsUpdate = true;
-                 if(currentActivePeriod?.id === periodIdBeingEdited && updatedPeriods[periodIndex].endDate === null) {
-                    setCurrentActivePeriod(updatedPeriods[periodIndex]);
-                }
+                const newPeriod: PeriodData = {
+                    id: Date.now().toString(),
+                    startDate: dateStr,
+                    endDate: null,
+                    dailyLogs: [{date: dateStr}]
+                };
+                updatedPeriods = [newPeriod, ...periods].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+                setPeriods(updatedPeriods);
+                setCurrentActivePeriod(newPeriod);
+                needsSave = true;
+            }
+        } else if (currentTarget === 'endPeriod' && currentActivePeriod) {
+            if (new Date(dateStr) < new Date(currentActivePeriod.startDate)) {
+                Alert.alert("Data non valida", "La data di fine non può precedere l'inizio.");
+            } else {
+                updatedPeriods = periods.map(p => 
+                    p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
+                );
+                setPeriods(updatedPeriods);
+                setCurrentActivePeriod(null);
+                needsSave = true;
             }
         }
 
-      setPeriods(updatedPeriods);
-      await savePeriods(updatedPeriods);
-      
-      const newAvgCycle = getAverageCycleLength(updatedPeriods);
-      const newAvgPeriod = getAveragePeriodLength(updatedPeriods);
-      const newSettings = {
-        averageCycleLength: newAvgCycle,
-        averagePeriodLength: newAvgPeriod
-      };
-      
-      await saveSettings(newSettings);
-      setSettings(newSettings);
-
-    } catch (error) {
-      Alert.alert("Error", "Failed to save changes");
-    } finally {
-      setDatePickerVisible(false);
+        if (needsSave) {
+            await savePeriods(updatedPeriods);
+            const newAvgCycle = getAverageCycleLength(updatedPeriods);
+            const newAvgPeriod = getAveragePeriodLength(updatedPeriods);
+            const newSettings = { averageCycleLength: newAvgCycle || 28, averagePeriodLength: newAvgPeriod || 5 };
+            await saveSettings(newSettings);
+            setSettings(newSettings);
+        }
     }
+    setDatePickerTarget(null); 
   };
 
-  const logFlow = async (flow: FlowIntensity) => {
-    if (!currentActivePeriod) return;
-    
-    const today = formatDateToYYYYMMDD(new Date());
-    const updatedLogs = currentActivePeriod.dailyLogs 
-      ? [...currentActivePeriod.dailyLogs] 
-      : [];
-    
-    const existingLogIndex = updatedLogs.findIndex(log => log.date === today);
-    
-    if (existingLogIndex >= 0) {
-      updatedLogs[existingLogIndex] = { ...updatedLogs[existingLogIndex], flow };
-    } else {
-      updatedLogs.push({ date: today, flow });
-    }
 
-    const updatedPeriod = {
-      ...currentActivePeriod,
-      dailyLogs: updatedLogs
-    };
-
-    const updatedPeriods = periods.map(p => 
-      p.id === currentActivePeriod.id ? updatedPeriod : p
-    );
-
-    setPeriods(updatedPeriods);
-    setCurrentActivePeriod(updatedPeriod);
-    await savePeriods(updatedPeriods);
-  };
-
-  const getPrediction = () => {
-    if (!periods.length) return "Register your first period";
-    if (currentActivePeriod) return "Currently on period";
+  const getPrediction = (): string => {
+    if (periods.length === 0 || !periods[0]?.startDate) return "Registra il tuo primo ciclo.";
+    if (currentActivePeriod) return "Ciclo attualmente in corso.";
     
     const lastPeriod = periods[0];
     const lastStart = new Date(lastPeriod.startDate);
@@ -384,22 +259,21 @@ const PeriodTrackerScreen = () => {
     
     const diffDays = Math.round((nextStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
-    if (diffDays === 0) return "Period expected today!";
-    if (diffDays === 1) return "Period expected tomorrow";
-    return `Period expected in ${diffDays} days`;
+    if (diffDays < -5) return `Prossimo previsto: ${nextStart.toLocaleDateString()} (in ritardo?)`;
+    if (diffDays < 0) return `Prossimo previsto: ${nextStart.toLocaleDateString()} (in ritardo?)`;
+    if (diffDays === 0) return "Ciclo previsto oggi!";
+    if (diffDays === 1) return "Ciclo previsto domani";
+    return `Ciclo previsto tra ${diffDays} giorni`;
   };
 
-  const getCurrentDay = () => {
-    if (!currentActivePeriod) return "No active period";
-    
+  const getCurrentDayInfo = (): string => {
+    if (!currentActivePeriod) return "Nessun ciclo attivo";
     const start = new Date(currentActivePeriod.startDate);
     const today = new Date();
     start.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
-    
     const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return `Day ${diffDays} of cycle`;
+    return `Giorno ${diffDays} del ciclo`;
   };
 
   if (isLoading) {
@@ -414,11 +288,12 @@ const PeriodTrackerScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.container}>
-          <Text style={styles.headerText}>Period Tracker</Text>
+          <Text style={styles.headerText}>Traccia Ciclo</Text>
           
           <View style={styles.statusCard}>
-            <Text style={styles.statusTitle}>{getCurrentDay()}</Text>
+            <Text style={styles.statusTitle}>{getCurrentDayInfo()}</Text>
             <Text style={styles.statusSubtitle}>{getPrediction()}</Text>
+            {currentActivePeriod && <Text style={styles.infoTextLight}>Inizio: {new Date(currentActivePeriod.startDate).toLocaleDateString()}</Text>}
           </View>
 
           {!currentActivePeriod ? (
@@ -426,28 +301,25 @@ const PeriodTrackerScreen = () => {
               style={[styles.button, styles.startButton]}
               onPress={() => showDatePicker('startPeriod')}
             >
-              <Text style={styles.buttonText}>Start Period</Text>
+              <Text style={styles.buttonText}>Inizia Periodo</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.activePeriodContainer}>
-              <Text style={styles.activePeriodTitle}>Current Period</Text>
-              
-
-                    <Text style={styles.flowButtonText}>
-                      {flow.charAt(0).toUpperCase() + flow.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              
+              <Text style={styles.activePeriodTitle}>Periodo Attuale</Text>
               <TouchableOpacity
                 style={[styles.button, styles.endButton]}
                 onPress={() => showDatePicker('endPeriod')}
               >
-                <Text style={styles.buttonText}>End Period</Text>
+                <Text style={styles.buttonText}>Termina Periodo</Text>
               </TouchableOpacity>
             </View>
           )}
+
+          <View style={styles.infoBox}>
+              <Text style={styles.infoTextBold}>Info Medie:</Text>
+              <Text style={styles.infoText}>Lunghezza ciclo: ~{settings.averageCycleLength} giorni</Text>
+              <Text style={styles.infoText}>Durata periodo: ~{settings.averagePeriodLength} giorni</Text>
+          </View>
 
           {datePickerVisible && (
             <DateTimePicker
@@ -464,121 +336,23 @@ const PeriodTrackerScreen = () => {
   );
 };
 
-// ===== STYLES =====
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFF0F5'
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFF0F5'
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingBottom: 20
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 20
-  },
-  headerText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#D81B60',
-    marginBottom: 25
-  },
-  statusCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
-  },
-  statusTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#C2185B',
-    marginBottom: 5
-  },
-  statusSubtitle: {
-    fontSize: 16,
-    color: '#AD1457',
-    textAlign: 'center'
-  },
-  activePeriodContainer: {
-    width: '100%',
-    backgroundColor: '#FFF9C4',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 20
-  },
-  activePeriodTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#C2185B',
-    marginBottom: 15,
-    textAlign: 'center'
-  },
-  flowButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15
-  },
-  flowButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#F8BBD0',
-    minWidth: 80,
-    alignItems: 'center'
-  },
-  flowButtonSelected: {
-    backgroundColor: '#F06292',
-    borderWidth: 1,
-    borderColor: '#D81B60'
-  },
-  flowButtonText: {
-    color: '#880E4F',
-    fontWeight: '500'
-  },
-  button: {
-    paddingVertical: 15,
-    borderRadius: 25,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3
-  },
-  startButton: {
-    backgroundColor: '#4CAF50'
-  },
-  endButton: {
-    backgroundColor: '#F44336'
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16
-  };
-
-  editSection: { marginTop: 10, marginBottom:20, width: '100%', padding:15, backgroundColor: 'rgba(255, 249, 196, 0.8)', borderRadius:10, borderWidth:1, borderColor:'rgba(253, 236, 166,0.9)'},
-  editTextHeader: {fontSize: 16, fontWeight:'bold', color: '#FBC02D', textAlign:'center', marginBottom:10},
-  editButtonsContainer: {flexDirection:'row', justifyContent:'space-around'},
-  editButton: {alignItems:'center', paddingVertical:8, paddingHorizontal:12, backgroundColor: 'rgba(255, 253, 231, 0.9)', borderRadius:8, marginHorizontal: 5, borderWidth:1, borderColor:'#FFF9C4'},
-  editButtonText: {color: '#F9A825', fontSize:14},
-  editDateText: {color: '#FBC02D', fontSize:12, marginTop:2},
+  safeArea: { flex: 1, backgroundColor: '#FFF0F5' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF0F5'},
+  scrollContainer: { flexGrow: 1 },
+  container: { flex: 1, alignItems: 'center', paddingTop: 30, paddingHorizontal: 20, paddingBottom: 30 },
+  headerText: { fontSize: 30, fontWeight: 'bold', color: '#D81B60', marginBottom: 25, fontFamily: Platform.OS === 'ios' ? 'Papyrus' : 'serif' },
+  statusCard: { backgroundColor: '#FFFFFF', padding: 20, borderRadius:20, marginBottom:25, width: '100%', alignItems:'center', shadowColor: "#FF69B4", shadowOffset: {width: 0, height: 3}, shadowOpacity: 0.25, shadowRadius: 4, elevation: 7, borderWidth: 1, borderColor: '#FFE4E1'},
+  statusTitle: { fontSize: 22, fontWeight: '600', color: '#C2185B', marginBottom: 7, textAlign: 'center' },
+  statusSubtitle: { fontSize: 16, color: '#AD1457', marginBottom: 12, textAlign: 'center', fontStyle: 'italic' },
+  activePeriodContainer: { width: '100%', alignItems: 'center', marginBottom: 20, padding:15, backgroundColor: 'rgba(255,235,238, 0.6)', borderRadius:15, borderWidth:1, borderColor: 'rgba(255,182,193, 0.5)'},
+  activePeriodTitle: { fontSize:18, fontWeight:'500', color: '#C2185B', marginBottom:15},
+  button: { paddingVertical: 15, paddingHorizontal: 30, borderRadius: 30, marginBottom: 20, width: '95%', alignItems: 'center', elevation: 3, shadowColor: "#000", shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.15, shadowRadius: 2.5},
+  startButton: { backgroundColor: '#4CAF50' },
+  endButton: { backgroundColor: '#F44336', marginTop:10 },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  infoBox: { marginTop: 15, padding: 18, backgroundColor: 'rgba(255, 235, 238, 0.75)', borderRadius: 15, width: '100%', alignItems:'flex-start' },
+  infoText: { fontSize: 15, color: '#C2185B', marginBottom: 6,},
+  infoTextLight: {fontSize: 14, color: '#E91E63', textAlign: 'center'},
+  infoTextBold: {fontSize: 16, color: '#AD1457', marginBottom: 8, fontWeight:'bold'}
 });
