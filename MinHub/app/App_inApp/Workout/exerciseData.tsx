@@ -207,5 +207,3 @@ export const exercises: Exercise[] = [
   }
 ];
 
-
-
