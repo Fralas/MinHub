@@ -1,20 +1,60 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { formatDateToYYYYMMDD, getAverageCycleLength, getAveragePeriodLength } from '../../utils/cycleLogic';
+import { loadPeriods, loadSettings, savePeriods, saveSettings } from '../../utils/cycleStore';
+import { CycleSettings, DailyLog, FlowIntensity, Mood, PeriodData, Symptom } from '../../utils/cycleTypes';
 
-type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
+const FLOW_OPTIONS: FlowIntensity[] = ['spotting', 'light', 'medium', 'heavy'];
+const SYMPTOM_OPTIONS: Symptom[] = ['cramps', 'headache', 'fatigue', 'nausea', 'acne', 'tender_breasts', 'backache', 'bloating'];
+const MOOD_OPTIONS: Mood[] = ['happy', 'sad', 'irritable', 'anxious', 'calm', 'energetic', 'mood_swings', 'stressed'];
+
+const defaultInitialSettings: CycleSettings = { averageCycleLength: 28, averagePeriodLength: 5 };
+
+export default function PeriodTrackerScreen() {
+  const router = useRouter();
+  const [periods, setPeriods] = useState<PeriodData[]>([]);
+  const [settings, setSettings] = useState<CycleSettings>(defaultInitialSettings);
+  const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const loadedPeriodsData = await loadPeriods();
+        const loadedSettingsData = await loadSettings();
+
+        const newAvgCycle = getAverageCycleLength(loadedPeriodsData);
+        const newAvgPeriod = getAveragePeriodLength(loadedPeriodsData);
+
+        let finalSettings = loadedSettingsData;
+        if ((newAvgCycle !== loadedSettingsData.averageCycleLength && newAvgCycle > 0) || (newAvgPeriod !== loadedSettingsData.averagePeriodLength && newAvgPeriod > 0) ) {
+            finalSettings = { 
+                averageCycleLength: newAvgCycle || defaultInitialSettings.averageCycleLength, 
+                averagePeriodLength: newAvgPeriod || defaultInitialSettings.averagePeriodLength 
+            };
+            await saveSettings(finalSettings);
+        }
+
+        setSettings(finalSettings);
+        const sortedPeriods = [...loadedPeriodsData].sort((a, b) => 
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        );
+        setPeriods(sortedPeriods);
+        const active = sortedPeriods.find(p => p.endDate === null);
+        setCurrentActivePeriod(active || null);
+    } catch (error) {
+        Alert.alert("Errore", "Impossibile caricare i dati del ciclo");
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);}
 
 interface DailyLog {
   date: string;
@@ -243,6 +283,42 @@ const PeriodTrackerScreen = () => {
           break;
       }
 
+       if (mode === 'startPeriod') {
+      if (currentActivePeriod) {
+        Alert.alert("Ciclo Attivo", "C'è già un ciclo attivo.");
+      } else {
+        const newPeriod: PeriodData = { 
+          id: Date.now().toString(), 
+          startDate: newDateString, 
+          endDate: null,
+          dailyLogs: [{date: newDateString}] 
+        };
+        updatedPeriods = [newPeriod, ...periods];
+        setCurrentActivePeriod(newPeriod);
+        activePeriodNeedsUpdate = true;
+      }
+    } else if (mode === 'endPeriod' && currentActivePeriod) {
+      if (new Date(newDateString) < new Date(currentActivePeriod.startDate)) {
+          Alert.alert("Data non valida", "La data di fine non può essere precedente alla data di inizio.");
+      } else {
+          updatedPeriods = periods.map(p => p.id === currentActivePeriod.id ? { ...p, endDate: newDateString } : p);
+          setCurrentActivePeriod(null);
+          activePeriodNeedsUpdate = true;
+      }
+    } else if (mode === 'editStartDate' && periodIdBeingEdited) {
+        const periodIndex = updatedPeriods.findIndex(p=> p.id === periodIdBeingEdited);
+        if (periodIndex > -1) {
+            if (updatedPeriods[periodIndex].endDate && new Date(newDateString) > new Date(updatedPeriods[periodIndex].endDate!)) {
+                 Alert.alert("Data non valida", "La data di inizio non può essere successiva alla data di fine.");
+            } else {
+                updatedPeriods[periodIndex] = {...updatedPeriods[periodIndex], startDate: newDateString};
+                activePeriodNeedsUpdate = true;
+                 if(currentActivePeriod?.id === periodIdBeingEdited && updatedPeriods[periodIndex].endDate === null) {
+                    setCurrentActivePeriod(updatedPeriods[periodIndex]);
+                }
+            }
+        }
+
       setPeriods(updatedPeriods);
       await savePeriods(updatedPeriods);
       
@@ -356,18 +432,7 @@ const PeriodTrackerScreen = () => {
             <View style={styles.activePeriodContainer}>
               <Text style={styles.activePeriodTitle}>Current Period</Text>
               
-              <View style={styles.flowButtonsContainer}>
-                {(['spotting', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(flow => (
-                  <TouchableOpacity
-                    key={flow}
-                    style={[
-                      styles.flowButton,
-                      currentActivePeriod.dailyLogs?.some(
-                        log => log.date === formatDateToYYYYMMDD(new Date()) && log.flow === flow
-                      ) && styles.flowButtonSelected
-                    ]}
-                    onPress={() => logFlow(flow)}
-                  >
+
                     <Text style={styles.flowButtonText}>
                       {flow.charAt(0).toUpperCase() + flow.slice(1)}
                     </Text>
@@ -508,7 +573,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16
-  }
-});
+  };
 
-export default PeriodTrackerScreen;
+  editSection: { marginTop: 10, marginBottom:20, width: '100%', padding:15, backgroundColor: 'rgba(255, 249, 196, 0.8)', borderRadius:10, borderWidth:1, borderColor:'rgba(253, 236, 166,0.9)'},
+  editTextHeader: {fontSize: 16, fontWeight:'bold', color: '#FBC02D', textAlign:'center', marginBottom:10},
+  editButtonsContainer: {flexDirection:'row', justifyContent:'space-around'},
+  editButton: {alignItems:'center', paddingVertical:8, paddingHorizontal:12, backgroundColor: 'rgba(255, 253, 231, 0.9)', borderRadius:8, marginHorizontal: 5, borderWidth:1, borderColor:'#FFF9C4'},
+  editButtonText: {color: '#F9A825', fontSize:14},
+  editDateText: {color: '#FBC02D', fontSize:12, marginTop:2},
+});
