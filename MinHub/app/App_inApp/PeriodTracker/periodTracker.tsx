@@ -1,406 +1,514 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Dimensions,
-  ImageBackground,
+  Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import * as Progress from 'react-native-progress';
-import { MEDITATIONS_DATA, Meditation } from '../meditations';
 
-const SESSIONS_COUNT_STORAGE_KEY = '@meditationApp_sessionsCount_v1';
+type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
 
-export default function MeditationPlayerScreen() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [meditation, setMeditation] = useState<Meditation | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [bellSound, setBellSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+interface DailyLog {
+  date: string;
+  flow?: FlowIntensity;
+}
+
+interface PeriodData {
+  id: string;
+  startDate: string;
+  endDate: string | null;
+  dailyLogs?: DailyLog[];
+}
+
+interface CycleSettings {
+  averageCycleLength: number;
+  averagePeriodLength: number;
+}
+
+const formatDateToYYYYMMDD = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const calculateAverage = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sum = values.reduce((a, b) => a + b, 0);
+  return Math.round(sum / values.length);
+};
+
+const getAverageCycleLength = (periods: PeriodData[]): number => {
+  if (periods.length < 2) return 28;
+  
+  const cycleLengths: number[] = [];
+  
+  for (let i = 0; i < periods.length - 1; i++) {
+    const current = periods[i];
+    const next = periods[i + 1];
+    
+    if (current.endDate && next.endDate) {
+      const currentEnd = new Date(current.endDate);
+      const nextStart = new Date(next.startDate);
+      const diffDays = Math.round((nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 0) {
+        cycleLengths.push(diffDays);
+      }
+    }
+  }
+  
+  return calculateAverage(cycleLengths) || 28;
+};
+
+const getAveragePeriodLength = (periods: PeriodData[]): number => {
+  const periodLengths: number[] = [];
+  
+  periods.forEach(period => {
+    if (period.endDate) {
+      const start = new Date(period.startDate);
+      const end = new Date(period.endDate);
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      periodLengths.push(diffDays);
+    }
+  });
+  
+  return calculateAverage(periodLengths) || 5;
+};
+
+const PERIODS_KEY = 'periodTracker_periods';
+const SETTINGS_KEY = 'periodTracker_settings';
+
+const loadPeriods = async (): Promise<PeriodData[]> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(PERIODS_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : [];
+  } catch (e) {
+    console.error('Failed to load periods', e);
+    return [];
+  }
+};
+
+const savePeriods = async (periods: PeriodData[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(PERIODS_KEY, JSON.stringify(periods));
+  } catch (e) {
+    console.error('Failed to save periods', e);
+  }
+};
+
+const loadSettings = async (): Promise<CycleSettings> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(SETTINGS_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : { averageCycleLength: 28, averagePeriodLength: 5 };
+  } catch (e) {
+    console.error('Failed to load settings', e);
+    return { averageCycleLength: 28, averagePeriodLength: 5 };
+  }
+};
+
+const saveSettings = async (settings: CycleSettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Failed to save settings', e);
+  }
+};
+
+const PeriodTrackerScreen = () => {
+  const [periods, setPeriods] = useState<PeriodData[]>([]);
+  const [settings, setSettings] = useState<CycleSettings>({ averageCycleLength: 28, averagePeriodLength: 5 });
+  const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [durationMillis, setDurationMillis] = useState<number | null>(null);
-  const [positionMillis, setPositionMillis] = useState<number>(0);
-  const [breathingAnimation] = useState(new Animated.Value(0));
 
-  const [playStartBell, setPlayStartBell] = useState<boolean>(false);
-  const [playEndBell, setPlayEndBell] = useState<boolean>(false);
-  const isMountedRef = useRef(true);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-
-  useEffect(() => {
-    const meditationDetails = MEDITATIONS_DATA.find((m: Meditation) => m.id === id);
-    if (meditationDetails) {
-      setMeditation(meditationDetails);
-    } else {
-      if (router.canGoBack()) router.back();
-      else router.replace('/');
-    }
-  }, [id, router]);
-
-  const incrementSessionsCount = async () => {
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const currentCountStr = await AsyncStorage.getItem(SESSIONS_COUNT_STORAGE_KEY);
-      const currentCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
-      await AsyncStorage.setItem(SESSIONS_COUNT_STORAGE_KEY, (currentCount + 1).toString());
-    } catch (e) {
-      // Errore silente
-    }
-  };
+      const [loadedPeriods, loadedSettings] = await Promise.all([
+        loadPeriods(),
+        loadSettings()
+      ]);
+      
+      const newAvgCycle = getAverageCycleLength(loadedPeriods);
+      const newAvgPeriod = getAveragePeriodLength(loadedPeriods);
 
-  const formatTime = (millis: number | null | undefined): string => {
-    if (millis == null || Number.isNaN(millis) || millis < 0) return '00:00';
-    const totalSeconds = Math.floor(millis / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  };
-
-  const loadSoundAsync = useCallback(async (currentMeditation: Meditation) => {
-    if (!currentMeditation) {
-        if(isMountedRef.current) setIsLoading(false);
-        Alert.alert("Errore Meditazione", "Dettagli meditazione non trovati.");
-        return null;
-    }
-    if (!currentMeditation.audioFile) {
-        if(isMountedRef.current) setIsLoading(false);
-        Alert.alert("Errore Audio", `File audio non specificato o non valido per la meditazione: "${currentMeditation.title}". Controlla meditations.ts.`);
-        return null;
-    }
-
-    if(isMountedRef.current) setIsLoading(true);
-    let newSoundInstance: Audio.Sound | null = null;
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
-        playThroughEarpieceAndroid: false,
-      });
-
-      const { sound: createdSound } = await Audio.Sound.createAsync(
-        currentMeditation.audioFile,
-        { shouldPlay: false },
-        (playbackStatus) => {
-          if (!isMountedRef.current) return;
-          if (!playbackStatus.isLoaded) {
-            if (playbackStatus.error) Alert.alert("Errore Audio", `Caricamento fallito: ${playbackStatus.error}`);
-          } else {
-            setPositionMillis(playbackStatus.positionMillis);
-            setDurationMillis(playbackStatus.durationMillis ?? null);
-            if (playbackStatus.didJustFinish && !playbackStatus.isLooping) {
-              if(isMountedRef.current) setIsPlaying(false);
-              createdSound.setPositionAsync(0).catch(() => {});
-              if(isMountedRef.current) setPositionMillis(0);
-              incrementSessionsCount();
-              if (playEndBell && bellSound) {
-                bellSound.replayAsync().catch(() => {});
-              }
-              Alert.alert("Meditazione Completata", "Ottimo lavoro!");
-            }
-          }
-        }
+      const finalSettings = {
+        averageCycleLength: newAvgCycle,
+        averagePeriodLength: newAvgPeriod
+      };
+      
+      await saveSettings(finalSettings);
+      setSettings(finalSettings);
+      
+      const sortedPeriods = [...loadedPeriods].sort((a, b) => 
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
-      newSoundInstance = createdSound;
-    } catch (error: any) {
-      Alert.alert("Errore Audio", `Impossibile caricare: ${error.message || error}`);
+      
+      setPeriods(sortedPeriods);
+      setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load cycle data");
     } finally {
-      if(isMountedRef.current) setIsLoading(false);
+      setIsLoading(false);
     }
-    return newSoundInstance;
-  }, [playEndBell, bellSound]);
-
-  useEffect(() => {
-    const loadInitialBellSound = async () => {
-      try {
-        const { sound: loadedBellSound } = await Audio.Sound.createAsync(require('../../../../assets/audio/bell.mp3'));
-        if (isMountedRef.current) setBellSound(loadedBellSound);
-      } catch (error) {
-        Alert.alert("Errore Campanella", "Impossibile caricare il suono della campanella.");
-      }
-    };
-    loadInitialBellSound();
-    return () => {
-        bellSound?.unloadAsync().catch(() => {});
-    };
   }, []);
 
-
-  useEffect(() => {
-    let currentMeditationSoundRef: Audio.Sound | null = null;
-    const setupMainAudio = async () => {
-      if (meditation && isMountedRef.current) {
-        if (sound) {
-          await sound.unloadAsync();
-          if (isMountedRef.current) {
-            setSound(null);
-            setIsPlaying(false);
-            setPositionMillis(0);
-            setDurationMillis(null);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      
+      const fetchDataWrapper = async () => {
+        try {
+          await fetchData();
+        } catch (error) {
+          if (isActive) {
+            Alert.alert("Error", "Failed to load data");
           }
         }
-        const newLoadedSound = await loadSoundAsync(meditation);
-        if (isMountedRef.current && newLoadedSound) {
-          currentMeditationSoundRef = newLoadedSound;
-          setSound(newLoadedSound);
-        }
-      } else if (!meditation && sound && isMountedRef.current) {
-          await sound.unloadAsync();
-          if (isMountedRef.current) setSound(null);
-      }
-    };
+      };
 
-    setupMainAudio();
+      fetchDataWrapper();
 
-    return () => {
-      currentMeditationSoundRef?.unloadAsync().catch(() => {});
-    };
-  }, [meditation, loadSoundAsync]);
+      return () => {
+        isActive = false;
+      };
+    }, [fetchData])
+  );
 
+  const showDatePicker = (mode: 'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate', periodId?: string) => {
+    setDatePickerTarget(mode);
+    if (periodId) setEditingPeriodId(periodId);
+    setSelectedDate(new Date());
+    setDatePickerVisible(true);
+  };
 
-  useEffect(() => {
-    let animationSequence: Animated.CompositeAnimation | null = null;
-    if (isPlaying && sound) {
-      const breathDuration = 6000;
-      const inhale = Animated.timing(breathingAnimation, { toValue: 1, duration: breathDuration / 2, useNativeDriver: true });
-      const exhale = Animated.timing(breathingAnimation, { toValue: 0, duration: breathDuration / 2, useNativeDriver: true });
-      animationSequence = Animated.loop(Animated.sequence([inhale, exhale]));
-      animationSequence.start();
-    } else {
-      animationSequence?.stop();
-      breathingAnimation.setValue(0);
+  const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
+    if (event.type === 'dismissed') {
+      setDatePickerVisible(false);
+      return;
     }
-    return () => {
-      animationSequence?.stop();
-    };
-  }, [isPlaying, sound, breathingAnimation]);
 
-  const handlePlayPause = async () => {
-    if (!sound && meditation) {
-        const reloadedSound = await loadSoundAsync(meditation);
-        if (reloadedSound) {
-            if(isMountedRef.current) setSound(reloadedSound);
-            try {
-                if (playStartBell && bellSound && !isPlaying) {
-                    await bellSound.replayAsync().catch(()=>{});
-                }
-                await reloadedSound.playAsync();
-                if (isMountedRef.current) setIsPlaying(true);
-            } catch(e: any){
-                 Alert.alert("Errore Player", `Riproduzione fallita: ${e.message || e}`);
-            }
-        }
-        return;
-    }
-    if (!sound) return;
+    if (!date || !datePickerTarget) return;
+    
+    const dateStr = formatDateToYYYYMMDD(date);
+    let updatedPeriods = [...periods];
 
     try {
-        const status = await sound.getStatusAsync();
-        if (!status.isLoaded) {
-            Alert.alert("Errore Player", "Suono non caricato. Riprova.");
-            if (meditation) await loadSoundAsync(meditation);
-            return;
-        }
+      switch (datePickerTarget) {
+        case 'startPeriod':
+          if (!currentActivePeriod) {
+            const newPeriod: PeriodData = {
+              id: Date.now().toString(),
+              startDate: dateStr,
+              endDate: null,
+              dailyLogs: []
+            };
+            updatedPeriods = [newPeriod, ...periods];
+            setCurrentActivePeriod(newPeriod);
+          }
+          break;
 
-        if (isPlaying) {
-            await sound.pauseAsync();
-        } else {
-            if (playStartBell && bellSound && positionMillis < 1000 && !isPlaying ) {
-                 await bellSound.replayAsync().catch(()=>{});
-            }
-            if (status.didJustFinish) {
-                await sound.replayAsync();
-            } else {
-                await sound.playAsync();
-            }
-        }
-        if (isMountedRef.current) setIsPlaying(!isPlaying);
-    } catch(error: any) {
-        Alert.alert("Errore Player", `Azione fallita: ${error.message || error}`);
+        case 'endPeriod':
+          if (currentActivePeriod) {
+            updatedPeriods = periods.map(p => 
+              p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
+            );
+            setCurrentActivePeriod(null);
+          }
+          break;
+
+        case 'editStartDate':
+          updatedPeriods = periods.map(p => 
+            p.id === editingPeriodId ? { ...p, startDate: dateStr } : p
+          );
+          break;
+
+        case 'editEndDate':
+          updatedPeriods = periods.map(p => 
+            p.id === editingPeriodId ? { ...p, endDate: dateStr } : p
+          );
+          break;
+      }
+
+      setPeriods(updatedPeriods);
+      await savePeriods(updatedPeriods);
+      
+      const newAvgCycle = getAverageCycleLength(updatedPeriods);
+      const newAvgPeriod = getAveragePeriodLength(updatedPeriods);
+      const newSettings = {
+        averageCycleLength: newAvgCycle,
+        averagePeriodLength: newAvgPeriod
+      };
+      
+      await saveSettings(newSettings);
+      setSettings(newSettings);
+
+    } catch (error) {
+      Alert.alert("Error", "Failed to save changes");
+    } finally {
+      setDatePickerVisible(false);
     }
   };
 
-  if (!meditation) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text>Meditazione non trovata o ID non valido.</Text>
-      </SafeAreaView>
-    );
-  }
-  if (isLoading && !sound) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00796B" />
-        <Text>Caricamento meditazione...</Text>
-      </SafeAreaView>
-    );
-  }
+  const logFlow = async (flow: FlowIntensity) => {
+    if (!currentActivePeriod) return;
+    
+    const today = formatDateToYYYYMMDD(new Date());
+    const updatedLogs = currentActivePeriod.dailyLogs 
+      ? [...currentActivePeriod.dailyLogs] 
+      : [];
+    
+    const existingLogIndex = updatedLogs.findIndex(log => log.date === today);
+    
+    if (existingLogIndex >= 0) {
+      updatedLogs[existingLogIndex] = { ...updatedLogs[existingLogIndex], flow };
+    } else {
+      updatedLogs.push({ date: today, flow });
+    }
 
-  const animatedCircleStyle = {
-    transform: [ { scale: breathingAnimation.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.1] }) } ],
-    opacity: breathingAnimation.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 1, 0.6] })
+    const updatedPeriod = {
+      ...currentActivePeriod,
+      dailyLogs: updatedLogs
+    };
+
+    const updatedPeriods = periods.map(p => 
+      p.id === currentActivePeriod.id ? updatedPeriod : p
+    );
+
+    setPeriods(updatedPeriods);
+    setCurrentActivePeriod(updatedPeriod);
+    await savePeriods(updatedPeriods);
   };
-  const progress = durationMillis && durationMillis > 0 && positionMillis >= 0 ? positionMillis / durationMillis : 0;
+
+  const getPrediction = () => {
+    if (!periods.length) return "Register your first period";
+    if (currentActivePeriod) return "Currently on period";
+    
+    const lastPeriod = periods[0];
+    const lastStart = new Date(lastPeriod.startDate);
+    const nextStart = new Date(lastStart);
+    nextStart.setDate(lastStart.getDate() + settings.averageCycleLength);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    nextStart.setHours(0, 0, 0, 0);
+    
+    const diffDays = Math.round((nextStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
+    if (diffDays === 0) return "Period expected today!";
+    if (diffDays === 1) return "Period expected tomorrow";
+    return `Period expected in ${diffDays} days`;
+  };
+
+  const getCurrentDay = () => {
+    if (!currentActivePeriod) return "No active period";
+    
+    const start = new Date(currentActivePeriod.startDate);
+    const today = new Date();
+    start.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    
+    const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return `Day ${diffDays} of cycle`;
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF69B4" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen options={{ title: meditation.title }} />
-       <ImageBackground
-        source={require('../../../../assets/images/meditationIMG/background_player.jpg')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.container}>
-          <Animated.View style={[styles.breathingCircle, animatedCircleStyle]} />
-          <Text style={styles.title}>{meditation.title}</Text>
-          <Text style={styles.description}>{meditation.description}</Text>
-
-          <Progress.Bar
-            progress={progress > 1 ? 1 : progress < 0 ? 0 : progress}
-            width={Dimensions.get('window').width * 0.8}
-            height={8}
-            color={"rgba(255, 255, 255, 0.7)"}
-            unfilledColor={"rgba(0, 0, 0, 0.2)"}
-            borderColor={"rgba(255, 255, 255, 0.3)"}
-            borderWidth={1}
-            borderRadius={5}
-            style={styles.progressBar}
-          />
-          <View style={styles.timerContainer}>
-            <Text style={styles.timeText}>{formatTime(positionMillis)}</Text>
-            <Text style={styles.timeText}> / </Text>
-            <Text style={styles.timeText}>{formatTime(durationMillis)}</Text>
+          <Text style={styles.headerText}>Period Tracker</Text>
+          
+          <View style={styles.statusCard}>
+            <Text style={styles.statusTitle}>{getCurrentDay()}</Text>
+            <Text style={styles.statusSubtitle}>{getPrediction()}</Text>
           </View>
 
-          <TouchableOpacity onPress={handlePlayPause} style={styles.playButton}>
-            <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={80} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.settingsContainer}>
-            <TouchableOpacity onPress={() => setPlayStartBell(!playStartBell)} style={[styles.settingButton, playStartBell && styles.settingButtonActive]}>
-                <Ionicons name={playStartBell ? "notifications" : "notifications-off-outline"} size={20} color="#FFFFFF" />
-                <Text style={styles.settingText}> Inizio</Text>
+          {!currentActivePeriod ? (
+            <TouchableOpacity 
+              style={[styles.button, styles.startButton]}
+              onPress={() => showDatePicker('startPeriod')}
+            >
+              <Text style={styles.buttonText}>Start Period</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setPlayEndBell(!playEndBell)} style={[styles.settingButton, playEndBell && styles.settingButtonActive]}>
-                <Ionicons name={playEndBell ? "notifications" : "notifications-off-outline"} size={20} color="#FFFFFF" />
-                <Text style={styles.settingText}> Fine</Text>
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={styles.activePeriodContainer}>
+              <Text style={styles.activePeriodTitle}>Current Period</Text>
+              
+              <View style={styles.flowButtonsContainer}>
+                {(['spotting', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(flow => (
+                  <TouchableOpacity
+                    key={flow}
+                    style={[
+                      styles.flowButton,
+                      currentActivePeriod.dailyLogs?.some(
+                        log => log.date === formatDateToYYYYMMDD(new Date()) && log.flow === flow
+                      ) && styles.flowButtonSelected
+                    ]}
+                    onPress={() => logFlow(flow)}
+                  >
+                    <Text style={styles.flowButtonText}>
+                      {flow.charAt(0).toUpperCase() + flow.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.button, styles.endButton]}
+                onPress={() => showDatePicker('endPeriod')}
+              >
+                <Text style={styles.buttonText}>End Period</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
+          {datePickerVisible && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+            />
+          )}
         </View>
-      </ImageBackground>
+      </ScrollView>
     </SafeAreaView>
   );
-}
+};
 
+// ===== STYLES =====
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#E0F2F7',
-  },
-   backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    backgroundColor: '#FFF0F5'
   },
   loadingContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(224, 242, 247, 0.9)',
-    zIndex: 10,
+    alignItems: 'center',
+    backgroundColor: '#FFF0F5'
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 20
   },
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 20
   },
-  breathingCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 26,
+  headerText: {
+    fontSize: 28,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#FFFFFF',
+    color: '#D81B60',
+    marginBottom: 25
   },
-  description: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 15,
-    color: '#F5F5F5',
-    paddingHorizontal: 10,
-  },
-  progressBar: {
-    alignSelf: 'center',
-    marginVertical: 10,
-  },
-  timerContainer: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  timeText: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontVariant: ['tabular-nums']
-  },
-  playButton: {
-    padding: 10,
-    marginBottom:15,
-  },
-  settingsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '80%',
-    marginTop: 10,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 10,
-  },
-  settingButton: {
-    flexDirection: 'row',
+  statusCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 20,
+    width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  statusTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#C2185B',
+    marginBottom: 5
+  },
+  statusSubtitle: {
+    fontSize: 16,
+    color: '#AD1457',
+    textAlign: 'center'
+  },
+  activePeriodContainer: {
+    width: '100%',
+    backgroundColor: '#FFF9C4',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20
+  },
+  activePeriodTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#C2185B',
+    marginBottom: 15,
+    textAlign: 'center'
+  },
+  flowButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15
+  },
+  flowButton: {
     paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
+    backgroundColor: '#F8BBD0',
+    minWidth: 80,
+    alignItems: 'center'
+  },
+  flowButtonSelected: {
+    backgroundColor: '#F06292',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: '#D81B60'
   },
-  settingButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  flowButtonText: {
+    color: '#880E4F',
+    fontWeight: '500'
   },
-  settingText: {
-    color: '#FFFFFF',
-    marginLeft: 5,
-    fontSize: 12,
+  button: {
+    paddingVertical: 15,
+    borderRadius: 25,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3
   },
+  startButton: {
+    backgroundColor: '#4CAF50'
+  },
+  endButton: {
+    backgroundColor: '#F44336'
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16
+  }
 });
+
+export default PeriodTrackerScreen;
