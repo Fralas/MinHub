@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   FlatList,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Countdown() {
   const [inputMinutes, setInputMinutes] = useState("");
@@ -14,7 +15,34 @@ export default function Countdown() {
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [presets, setPresets] = useState<number[]>([60, 300, 600]); // default: 1m, 5m, 10m
+  const [presets, setPresets] = useState<{ name: string; duration: number }[]>([]);
+
+  // Load presets from AsyncStorage
+  useEffect(() => {
+    const loadPresets = async () => {
+      try {
+        const json = await AsyncStorage.getItem("timerPresets");
+        if (json) {
+          setPresets(JSON.parse(json));
+        }
+      } catch (err) {
+        console.error("Failed to load presets", err);
+      }
+    };
+    loadPresets();
+  }, []);
+
+  // Save presets to AsyncStorage on change
+  useEffect(() => {
+    const savePresets = async () => {
+      try {
+        await AsyncStorage.setItem("timerPresets", JSON.stringify(presets));
+      } catch (err) {
+        console.error("Failed to save presets", err);
+      }
+    };
+    savePresets();
+  }, [presets]);
 
   const startCountdown = (duration: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -33,17 +61,11 @@ export default function Countdown() {
     }, 1000);
   };
 
-  const handleStart = () => {
-    const seconds = parseInt(inputMinutes) * 60;
-    if (!isNaN(seconds) && seconds > 0) {
-      startCountdown(seconds);
-    }
-  };
-
   const handleAddPreset = () => {
     const seconds = parseInt(inputMinutes) * 60;
-    if (!isNaN(seconds) && seconds > 0 && !presets.includes(seconds)) {
-      setPresets((prev) => [...prev, seconds]);
+    if (!isNaN(seconds) && seconds > 0) {
+      const name = `${parseInt(inputMinutes)} Min${parseInt(inputMinutes) > 1 ? "s" : ""}`;
+      setPresets((prev) => [...prev, { name, duration: seconds }]);
       setInputMinutes("");
     }
   };
@@ -57,8 +79,6 @@ export default function Countdown() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Countdown Timer</Text>
-      <Text style={styles.timerText}>{formatTime(secondsLeft)}</Text>
-
       <TextInput
         placeholder="Minutes"
         value={inputMinutes}
@@ -66,32 +86,33 @@ export default function Countdown() {
         keyboardType="numeric"
         style={styles.input}
       />
-
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.button} onPress={handleStart}>
-          <Text style={styles.buttonText}>Start</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.button} onPress={handleAddPreset}>
           <Text style={styles.buttonText}>Add Preset</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.subtitle}>Presets</Text>
       <FlatList
         data={presets}
-        keyExtractor={(item) => item.toString()}
-        horizontal
+        keyExtractor={(item, index) => index.toString()}
         contentContainerStyle={styles.presetList}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.presetButton}
-            onPress={() => startCountdown(item)}
-          >
-            <Text style={styles.presetText}>{Math.floor(item / 60)} min</Text>
-          </TouchableOpacity>
+          <View style={styles.presetCard}>
+            <Text style={styles.presetName}>{item.name}</Text>
+            <View style={styles.presetBottomRow}>
+              <Text style={styles.timeLeft}>{formatTime(item.duration)}</Text>
+              <TouchableOpacity
+                style={styles.playButton}
+                onPress={() => startCountdown(item.duration)}
+              >
+                <Text style={styles.playButtonText}>▶</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
       />
+
+      <Text style={styles.countdownText}>{formatTime(secondsLeft)}</Text>
     </View>
   );
 }
@@ -99,64 +120,74 @@ export default function Countdown() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: "center",
-    backgroundColor: "#f5f5f5",
+    padding: 20,
+    backgroundColor: "#fff",
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 24,
-  },
-  timerText: {
-    fontSize: 48,
-    textAlign: "center",
-    marginVertical: 24,
-    fontWeight: "600",
+    marginBottom: 16,
   },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 8,
     padding: 10,
-    marginBottom: 16,
-    fontSize: 18,
+    fontSize: 16,
+    marginBottom: 12,
   },
   buttonRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     marginBottom: 24,
   },
   button: {
-    flex: 1,
-    marginHorizontal: 5,
     backgroundColor: "#4CAF50",
-    padding: 12,
+    padding: 10,
     borderRadius: 8,
-    alignItems: "center",
   },
   buttonText: {
     color: "white",
     fontSize: 16,
   },
-  subtitle: {
-    fontSize: 20,
+  presetList: {
+    paddingBottom: 20,
+  },
+  presetCard: {
+    borderWidth: 1,
+    borderColor: "#000",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  presetName: {
+    fontSize: 18,
     fontWeight: "600",
     marginBottom: 8,
   },
-  presetList: {
-    gap: 10,
+  presetBottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  presetButton: {
-    backgroundColor: "#2196F3",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginRight: 10,
-  },
-  presetText: {
-    color: "white",
+  timeLeft: {
     fontSize: 16,
+  },
+  playButton: {
+    backgroundColor: "#2196F3",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  playButtonText: {
+    color: "white",
+    fontSize: 18,
+  },
+  countdownText: {
+    fontSize: 36,
+    textAlign: "center",
+    marginTop: 24,
+    fontWeight: "bold",
   },
 });
