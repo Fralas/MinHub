@@ -1,84 +1,140 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   FlatList,
-} from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle } from 'react-native-svg';
 
-export default function Countdown() {
-  const [inputMinutes, setInputMinutes] = useState("");
-  const [secondsLeft, setSecondsLeft] = useState(0);
+type Preset = {
+  id: number;
+  name: string;
+  duration: number;
+};
+
+const STORAGE_KEY = 'TIMER_PRESETS';
+
+export default function CountdownTimer() {
+  const [timeLeft, setTimeLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [inputMinutes, setInputMinutes] = useState('');
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [presetName, setPresetName] = useState('');
+  const [totalTime, setTotalTime] = useState(0);
+
+  // Fix here: use ReturnType<typeof setInterval> | null
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [presets, setPresets] = useState<{ name: string; duration: number }[]>([]);
-
-  // Load presets from AsyncStorage
+  // Load presets on mount
   useEffect(() => {
     const loadPresets = async () => {
-      try {
-        const json = await AsyncStorage.getItem("timerPresets");
-        if (json) {
-          setPresets(JSON.parse(json));
-        }
-      } catch (err) {
-        console.error("Failed to load presets", err);
-      }
+      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+      if (saved) setPresets(JSON.parse(saved));
     };
     loadPresets();
   }, []);
 
-  // Save presets to AsyncStorage on change
   useEffect(() => {
-    const savePresets = async () => {
-      try {
-        await AsyncStorage.setItem("timerPresets", JSON.stringify(presets));
-      } catch (err) {
-        console.error("Failed to save presets", err);
+    if (isRunning && timeLeft > 0) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-    savePresets();
-  }, [presets]);
+  }, [isRunning, timeLeft]);
 
-  const startCountdown = (duration: number) => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setSecondsLeft(duration);
-    setIsRunning(true);
-
-    intervalRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!);
-          setIsRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const handleAddPreset = () => {
+  const startTimer = () => {
     const seconds = parseInt(inputMinutes) * 60;
-    if (!isNaN(seconds) && seconds > 0) {
-      const name = `${parseInt(inputMinutes)} Min${parseInt(inputMinutes) > 1 ? "s" : ""}`;
-      setPresets((prev) => [...prev, { name, duration: seconds }]);
-      setInputMinutes("");
-    }
+    if (isNaN(seconds) || seconds <= 0) return;
+    setTimeLeft(seconds);
+    setTotalTime(seconds);
+    setIsRunning(true);
   };
 
-  const formatTime = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  const savePreset = async () => {
+    const duration = parseInt(inputMinutes) * 60;
+    if (!presetName || isNaN(duration)) return;
+
+    const newPreset: Preset = {
+      id: Date.now(),
+      name: presetName,
+      duration,
+    };
+
+    const updatedPresets = [...presets, newPreset];
+    setPresets(updatedPresets);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPresets));
+    setPresetName('');
+    setInputMinutes('');
   };
+
+  const applyPreset = (preset: Preset) => {
+    setTimeLeft(preset.duration);
+    setTotalTime(preset.duration);
+    setIsRunning(true);
+  };
+
+  const deletePreset = async (id: number) => {
+    const filtered = presets.filter((p) => p.id !== id);
+    setPresets(filtered);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  };
+
+  const formatTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  // Circular Progress
+  const radius = 80;
+  const strokeWidth = 10;
+  const normalizedRadius = radius - strokeWidth / 2;
+  const circumference = 2 * Math.PI * normalizedRadius;
+  const percentage = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Countdown Timer</Text>
+      <Svg height={radius * 2} width={radius * 2}>
+        <Circle
+          stroke="#eee"
+          fill="none"
+          cx={radius}
+          cy={radius}
+          r={normalizedRadius}
+          strokeWidth={strokeWidth}
+        />
+        <Circle
+          stroke="#3b82f6"
+          fill="none"
+          cx={radius}
+          cy={radius}
+          r={normalizedRadius}
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+        />
+      </Svg>
+
+      <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
+
       <TextInput
         placeholder="Minutes"
         value={inputMinutes}
@@ -86,33 +142,46 @@ export default function Countdown() {
         keyboardType="numeric"
         style={styles.input}
       />
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.button} onPress={handleAddPreset}>
-          <Text style={styles.buttonText}>Add Preset</Text>
-        </TouchableOpacity>
-      </View>
 
+      <TouchableOpacity style={styles.button} onPress={startTimer}>
+        <Text style={styles.buttonText}>Start Timer</Text>
+      </TouchableOpacity>
+
+      <TextInput
+        placeholder="Preset Name"
+        value={presetName}
+        onChangeText={setPresetName}
+        style={styles.input}
+      />
+
+      <TouchableOpacity style={styles.button} onPress={savePreset}>
+        <Text style={styles.buttonText}>Save Preset</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>Presets:</Text>
       <FlatList
         data={presets}
-        keyExtractor={(item, index) => index.toString()}
-        contentContainerStyle={styles.presetList}
+        keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.presetCard}>
-            <Text style={styles.presetName}>{item.name}</Text>
-            <View style={styles.presetBottomRow}>
-              <Text style={styles.timeLeft}>{formatTime(item.duration)}</Text>
-              <TouchableOpacity
-                style={styles.playButton}
-                onPress={() => startCountdown(item.duration)}
-              >
-                <Text style={styles.playButtonText}>▶</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.presetItem}>
+            <TouchableOpacity onPress={() => applyPreset(item)}>
+              <Text style={styles.presetText}>
+                {item.name} ({Math.floor(item.duration / 60)} min)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert('Delete preset', 'Are you sure?', [
+                  { text: 'Cancel' },
+                  { text: 'Delete', onPress: () => deletePreset(item.id) },
+                ])
+              }
+            >
+              <Text style={styles.deleteButton}>✕</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
-
-      <Text style={styles.countdownText}>{formatTime(secondsLeft)}</Text>
     </View>
   );
 }
@@ -121,73 +190,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#fff",
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 16,
+  timeText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    position: 'absolute',
+    top: 90,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: '#ccc',
+    width: '80%',
     borderRadius: 8,
     padding: 10,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 24,
+    marginTop: 16,
   },
   button: {
-    backgroundColor: "#4CAF50",
-    padding: 10,
+    backgroundColor: '#3b82f6',
+    padding: 12,
     borderRadius: 8,
+    marginTop: 10,
+    width: '80%',
+    alignItems: 'center',
   },
   buttonText: {
-    color: "white",
+    color: '#fff',
     fontSize: 16,
   },
-  presetList: {
-    paddingBottom: 20,
-  },
-  presetCard: {
-    borderWidth: 1,
-    borderColor: "#000",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  presetName: {
+  sectionTitle: {
+    marginTop: 20,
     fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontWeight: 'bold',
   },
-  presetBottomRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  presetItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '80%',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
-  timeLeft: {
+  presetText: {
     fontSize: 16,
   },
-  playButton: {
-    backgroundColor: "#2196F3",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-  },
-  playButtonText: {
-    color: "white",
-    fontSize: 18,
-  },
-  countdownText: {
-    fontSize: 36,
-    textAlign: "center",
-    marginTop: 24,
-    fontWeight: "bold",
+  deleteButton: {
+    color: '#d11a2a',
+    fontSize: 20,
+    paddingHorizontal: 8,
   },
 });
