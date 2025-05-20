@@ -48,7 +48,12 @@ export default function SleepHelper() {
 
   return (
     <ScrollView style={styles.container}>
-      <Button title="View Statistics" onPress={() => router.push("/App_inApp/SleepHelper/sleep-statistics")} />
+      <View style={styles.statsButtonContainer}>
+        <Button
+          title="View Statistics"
+          onPress={() => router.push("/App_inApp/SleepHelper/sleep-statistics")}
+        />
+      </View>
       <FlatList
         data={sleepData}
         keyExtractor={(item) => item.day}
@@ -65,6 +70,11 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: '#fff',
+  },
+  statsButtonContainer: {
+    marginTop: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   list: {
     paddingBottom: 20,
