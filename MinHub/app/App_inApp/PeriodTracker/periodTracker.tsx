@@ -66,19 +66,19 @@ const getAverageCycleLength = (periods: PeriodData[]): number => {
   if (periods.length < 2) return 28;
   
   const cycleLengths: number[] = [];
-  
-  for (let i = 0; i < periods.length - 1; i++) {
-    const current = periods[i];
-    const next = periods[i + 1];
+  const sortedPeriods = [...periods].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  for (let i = 0; i < sortedPeriods.length - 1; i++) {
+    const currentPeriod = sortedPeriods[i];
+    const nextPeriod = sortedPeriods[i+1];
     
-    if (current.endDate && next.endDate) {
-      const currentEnd = new Date(current.endDate);
-      const nextStart = new Date(next.startDate);
-      const diffDays = Math.round((nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays > 0) {
+    const startDateCurrent = new Date(currentPeriod.startDate);
+    const startDateNext = new Date(nextPeriod.startDate);
+    const diffTime = startDateNext.getTime() - startDateCurrent.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0 && diffDays < 100) { 
         cycleLengths.push(diffDays);
-      }
     }
   }
   
@@ -156,26 +156,25 @@ const PeriodTrackerScreen = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedPeriods, loadedSettings] = await Promise.all([
+      const [loadedPeriods, loadedSettingsFromStorage] = await Promise.all([ 
         loadPeriods(),
         loadSettings()
       ]);
-      
-      const newAvgCycle = getAverageCycleLength(loadedPeriods);
-      const newAvgPeriod = getAveragePeriodLength(loadedPeriods);
-
-      const finalSettings = {
-        averageCycleLength: newAvgCycle,
-        averagePeriodLength: newAvgPeriod
-      };
-      
-      await saveSettings(finalSettings);
-      setSettings(finalSettings);
       
       const sortedPeriods = [...loadedPeriods].sort((a, b) => 
         new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
       
+      const newAvgCycle = getAverageCycleLength(sortedPeriods);
+      const newAvgPeriod = getAveragePeriodLength(sortedPeriods);
+
+      const finalSettings = {
+        averageCycleLength: newAvgCycle || loadedSettingsFromStorage.averageCycleLength,
+        averagePeriodLength: newAvgPeriod || loadedSettingsFromStorage.averagePeriodLength
+      };
+      
+      await saveSettings(finalSettings);
+      setSettings(finalSettings);
       setPeriods(sortedPeriods);
       setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
     } catch (error) {
@@ -184,6 +183,7 @@ const PeriodTrackerScreen = () => {
       setIsLoading(false);
     }
   }, []);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -210,39 +210,58 @@ const PeriodTrackerScreen = () => {
   const showDatePicker = (mode: 'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate', periodId?: string) => {
     setDatePickerTarget(mode);
     if (periodId) setEditingPeriodId(periodId);
-    setSelectedDate(new Date());
+    
+    if (mode === 'editStartDate' && periodId) {
+        const periodToEdit = periods.find(p => p.id === periodId);
+        if (periodToEdit) setSelectedDate(new Date(periodToEdit.startDate));
+        else setSelectedDate(new Date());
+    } else if (mode === 'editEndDate' && periodId) {
+        const periodToEdit = periods.find(p => p.id === periodId);
+        if (periodToEdit && periodToEdit.endDate) setSelectedDate(new Date(periodToEdit.endDate));
+        else setSelectedDate(new Date());
+    } else {
+        setSelectedDate(new Date());
+    }
     setDatePickerVisible(true);
   };
 
   const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
-    if (event.type === 'dismissed') {
-      setDatePickerVisible(false);
+    setDatePickerVisible(false); 
+    if (event.type === 'dismissed' || !date || !datePickerTarget) {
       return;
     }
-
-    if (!date || !datePickerTarget) return;
     
     const dateStr = formatDateToYYYYMMDD(date);
-    let updatedPeriods = [...periods];
+    let updatedPeriodsList = [...periods];
 
     try {
       switch (datePickerTarget) {
         case 'startPeriod':
-          if (!currentActivePeriod) {
-            const newPeriod: PeriodData = {
-              id: Date.now().toString(),
-              startDate: dateStr,
-              endDate: null,
-              dailyLogs: []
-            };
-            updatedPeriods = [newPeriod, ...periods];
-            setCurrentActivePeriod(newPeriod);
+          if (periods.some(p => p.endDate === null)) {
+            Alert.alert("Active Period", "An active period already exists. Please end it before starting a new one.");
+            return;
           }
+          if (periods.some(p => p.startDate === dateStr)) {
+            Alert.alert("Duplicate", "A period starting on this date already exists.");
+            return;
+          }
+          const newPeriod: PeriodData = {
+            id: Date.now().toString(),
+            startDate: dateStr,
+            endDate: null,
+            dailyLogs: []
+          };
+          updatedPeriodsList = [newPeriod, ...periods].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          setCurrentActivePeriod(newPeriod);
           break;
 
         case 'endPeriod':
           if (currentActivePeriod) {
-            updatedPeriods = periods.map(p => 
+            if (new Date(dateStr) < new Date(currentActivePeriod.startDate)) {
+                Alert.alert("Invalid Date", "End date cannot be before start date.");
+                return;
+            }
+            updatedPeriodsList = periods.map(p => 
               p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
             );
             setCurrentActivePeriod(null);
@@ -250,23 +269,38 @@ const PeriodTrackerScreen = () => {
           break;
 
         case 'editStartDate':
-          updatedPeriods = periods.map(p => 
-            p.id === editingPeriodId ? { ...p, startDate: dateStr } : p
-          );
+          updatedPeriodsList = periods.map(p => {
+            if (p.id === editingPeriodId) {
+                if (p.endDate && new Date(dateStr) > new Date(p.endDate)) {
+                    Alert.alert("Invalid Date", "Start date cannot be after end date.");
+                    return p; 
+                }
+                return { ...p, startDate: dateStr };
+            }
+            return p;
+          });
+          updatedPeriodsList.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
           break;
 
         case 'editEndDate':
-          updatedPeriods = periods.map(p => 
-            p.id === editingPeriodId ? { ...p, endDate: dateStr } : p
-          );
+          updatedPeriodsList = periods.map(p => {
+            if (p.id === editingPeriodId) {
+                if (new Date(dateStr) < new Date(p.startDate)) {
+                    Alert.alert("Invalid Date", "End date cannot be before start date.");
+                    return p; 
+                }
+                return { ...p, endDate: dateStr };
+            }
+            return p;
+          });
           break;
       }
 
-      setPeriods(updatedPeriods);
-      await savePeriods(updatedPeriods);
+      setPeriods(updatedPeriodsList);
+      await savePeriods(updatedPeriodsList);
       
-      const newAvgCycle = getAverageCycleLength(updatedPeriods);
-      const newAvgPeriod = getAveragePeriodLength(updatedPeriods);
+      const newAvgCycle = getAverageCycleLength(updatedPeriodsList);
+      const newAvgPeriod = getAveragePeriodLength(updatedPeriodsList);
       const newSettings = {
         averageCycleLength: newAvgCycle,
         averagePeriodLength: newAvgPeriod
@@ -274,14 +308,16 @@ const PeriodTrackerScreen = () => {
       
       await saveSettings(newSettings);
       setSettings(newSettings);
+      setCurrentActivePeriod(updatedPeriodsList.find(p => p.endDate === null) || null);
 
     } catch (error) {
       Alert.alert("Error", "Failed to save changes");
     } finally {
-      setDatePickerVisible(false);
+      setEditingPeriodId(null);
+      setDatePickerTarget(null);
     }
   };
-
+    -----
   const logFlow = async (flow: FlowIntensity) => {
     if (!currentActivePeriod) return;
     
