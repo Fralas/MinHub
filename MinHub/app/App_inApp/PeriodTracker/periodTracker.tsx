@@ -413,8 +413,99 @@ const addNote = async (note: string) => {
 };
 
 
+const trackMood = async (mood: DailyLog['mood']) => {
+  if (!currentActivePeriod) return;
+  
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+  let dailyLog = updatedLogs.find(log => log.date === today);
+  if (!dailyLog) {
+    dailyLog = { date: today };
+    updatedLogs.push(dailyLog);
+  }
 
+  dailyLog.mood = mood;
 
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+  const updatedPeriods = periods.map(p => 
+    p.id === currentActivePeriod.id ? updatedPeriod : p
+  );
+
+  setPeriods(updatedPeriods);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriods);
+};
+
+const getCycleInsights = () => {
+  if (periods.length < 3) return null;
+
+  const completedPeriods = periods.filter(p => p.endDate);
+  
+  // 1. Analisi sintomi ricorrenti
+  const symptomMap: Record<string, {count: number, days: number}> = {};
+  
+  completedPeriods.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      log.symptoms?.forEach(symptom => {
+        if (!symptomMap[symptom.name]) {
+          symptomMap[symptom.name] = {count: 0, days: 0};
+        }
+        symptomMap[symptom.name].count++;
+        if (symptom.intensity === 'severe') {
+          symptomMap[symptom.name].days++;
+        }
+      });
+    });
+  });
+
+  let positiveDays = 0;
+  let negativeDays = 0;
+  
+  completedPeriods.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      if (log.mood) {
+        if (log.mood === 'very_happy' || log.mood === 'happy') positiveDays++;
+        if (log.mood === 'sad' || log.mood === 'very_sad') negativeDays++;
+      }
+    });
+  });
+
+  return {
+    frequentSymptoms: Object.entries(symptomMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 3),
+    moodBalance: {
+      positive: positiveDays,
+      negative: negativeDays
+    },
+    averageCycleLength: settings.averageCycleLength,
+    averagePeriodLength: settings.averagePeriodLength
+  };
+};
+
+const getFlowStatistics = () => {
+  const flowStats = {
+    spotting: 0,
+    light: 0,
+    medium: 0,
+    heavy: 0
+  };
+
+  periods.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      if (log.flow) {
+        flowStats[log.flow]++;
+      }
+    });
+  });
+
+  return flowStats;
+};
 
   if (isLoading) {
     return (
