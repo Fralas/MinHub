@@ -504,16 +504,7 @@ const getFlowStatistics = () => {
     });
   });
 
-  return flowStats;
-};
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF69B4" />
-      </SafeAreaView>
-    );
-  }
+  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -536,14 +527,16 @@ const getFlowStatistics = () => {
           ) : (
             <View style={styles.activePeriodContainer}>
               <Text style={styles.activePeriodTitle}>Current Period</Text>
+              <Text style={styles.activePeriodDate}>Started: {new Date(currentActivePeriod.startDate).toLocaleDateString()}</Text>
               
+              <Text style={styles.sectionTitleSmall}>Log Flow</Text>
               <View style={styles.flowButtonsContainer}>
                 {(['spotting', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(flow => (
                   <TouchableOpacity
                     key={flow}
                     style={[
                       styles.flowButton,
-                      currentActivePeriod.dailyLogs?.some(
+                      currentActivePeriod.dailyLogs?.find(
                         log => log.date === formatDateToYYYYMMDD(new Date()) && log.flow === flow
                       ) && styles.flowButtonSelected
                     ]}
@@ -564,6 +557,86 @@ const getFlowStatistics = () => {
               </TouchableOpacity>
             </View>
           )}
+          
+          {currentActivePeriod && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Track Symptoms Today</Text>
+              <View style={styles.symptomButtons}>
+                {['Headache', 'Cramps', 'Fatigue', 'Bloating', 'Nausea', 'Backache'].map(symptomName => {
+                  const currentSymptom = currentActivePeriod.dailyLogs
+                                        ?.find(log => log.date === formatDateToYYYYMMDD(new Date()))
+                                        ?.symptoms?.find(s => s.name === symptomName);
+                  return (
+                  <TouchableOpacity
+                    key={symptomName}
+                    style={[
+                        styles.symptomButton,
+                        currentSymptom && styles.symptomButtonSelected 
+                    ]}
+                    onPress={() => {
+                        const newIntensity = currentSymptom?.intensity === 'moderate' ? 'mild' : 'moderate'; 
+                        trackSymptom({
+                            name: symptomName,
+                            intensity: newIntensity 
+                        })
+                    }}
+                  >
+                    <Text style={styles.symptomButtonText}>{symptomName} {currentSymptom ? `(${currentSymptom.intensity})` : ''}</Text>
+                  </TouchableOpacity>
+                );
+                })}
+              </View>
+            </View>
+          )}
+
+          {currentActivePeriod && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Mood Today</Text>
+              <View style={styles.moodButtons}>
+                {(['very_happy', 'happy', 'neutral', 'sad', 'very_sad'] as DailyLog['mood'][]).map(moodValue => {
+                  if (!moodValue) return null; 
+                  const currentMood = currentActivePeriod.dailyLogs
+                                        ?.find(log => log.date === formatDateToYYYYMMDD(new Date()))?.mood;
+                  return (
+                  <TouchableOpacity
+                    key={moodValue}
+                    style={[
+                        styles.moodButton,
+                        currentMood === moodValue && styles.moodButtonSelected 
+                    ]}
+                    onPress={() => trackMood(moodValue)}
+                  >
+                    <Text style={styles.moodButtonText}>{moodValue.replace('_', ' ')}</Text>
+                  </TouchableOpacity>
+                );
+                })}
+              </View>
+            </View>
+          )}
+
+          {cycleInsights && (
+            <View style={styles.insightsContainer}>
+              <Text style={styles.insightsTitle}>Cycle Insights</Text>
+              <Text style={styles.insightItem}>Avg. Cycle Length: {cycleInsights.averageCycleLength} days</Text>
+              <Text style={styles.insightItem}>Avg. Period Length: {cycleInsights.averagePeriodLength} days</Text>
+              
+              <Text style={styles.insightsSubtitle}>Frequent Symptoms (Top 3):</Text>
+              {cycleInsights.frequentSymptoms.length > 0 ? cycleInsights.frequentSymptoms.map(symptom => (
+                <Text key={symptom.name} style={styles.insightItem}>
+                  {symptom.name}: {symptom.count} days ({symptom.days} severe)
+                </Text>
+              )) : <Text  style={styles.insightItem}>No symptom data yet.</Text>}
+
+              <Text style={styles.insightsSubtitle}>Mood Balance (Completed Periods):</Text>
+              {cycleInsights.moodBalance.total > 0 ? (
+                <>
+                  <Text style={styles.insightItem}>Positive Days: {cycleInsights.moodBalance.positive}</Text>
+                  <Text style={styles.insightItem}>Negative Days: {cycleInsights.moodBalance.negative}</Text>
+                </>
+              ) : <Text style={styles.insightItem}>No mood data yet.</Text>}
+            </View>
+          )}
+
 
           {datePickerVisible && (
             <DateTimePicker
@@ -571,7 +644,7 @@ const getFlowStatistics = () => {
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDateChange}
-              maximumDate={new Date()}
+              maximumDate={new Date()} 
             />
           )}
         </View>
@@ -580,11 +653,10 @@ const getFlowStatistics = () => {
   );
 };
 
-// ===== STYLES =====
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFF0F5'
+    backgroundColor: '#FFF0F5' 
   },
   loadingContainer: {
     flex: 1,
@@ -594,7 +666,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: 20
+    paddingBottom: 30 
   },
   container: {
     flex: 1,
@@ -602,10 +674,11 @@ const styles = StyleSheet.create({
     padding: 20
   },
   headerText: {
-    fontSize: 28,
+    fontSize: 30, 
     fontWeight: 'bold',
-    color: '#D81B60',
-    marginBottom: 25
+    color: '#D81B60', 
+    marginBottom: 20, 
+    textAlign: 'center',
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
@@ -621,74 +694,191 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   statusTitle: {
-    fontSize: 20,
+    fontSize: 22, 
     fontWeight: '600',
-    color: '#C2185B',
-    marginBottom: 5
+    color: '#C2185B', 
+    marginBottom: 8
   },
   statusSubtitle: {
-    fontSize: 16,
-    color: '#AD1457',
+    fontSize: 17, 
+    color: '#AD1457', 
     textAlign: 'center'
   },
   activePeriodContainer: {
     width: '100%',
-    backgroundColor: '#FFF9C4',
+    backgroundColor: '#FFFDE7', 
     borderRadius: 15,
-    padding: 15,
-    marginBottom: 20
+    padding: 20, 
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
   },
   activePeriodTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20, 
+    fontWeight: 'bold', 
     color: '#C2185B',
-    marginBottom: 15,
+    marginBottom: 10, 
     textAlign: 'center'
+  },
+  activePeriodDate: {
+    fontSize: 16,
+    color: '#7B1FA2', 
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  sectionTitleSmall: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#880E4F', 
+    marginTop: 10,
+    marginBottom: 8,
   },
   flowButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15
+    justifyContent: 'space-around', 
+    marginBottom: 20 
   },
   flowButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#F8BBD0',
-    minWidth: 80,
-    alignItems: 'center'
+    paddingVertical: 10, 
+    paddingHorizontal: 10, 
+    borderRadius: 25, 
+    backgroundColor: '#F8BBD0', 
+    minWidth: 75, 
+    alignItems: 'center',
+    marginHorizontal: 4, 
+    borderWidth: 1,
+    borderColor: '#F48FB1' 
   },
   flowButtonSelected: {
-    backgroundColor: '#F06292',
-    borderWidth: 1,
-    borderColor: '#D81B60'
+    backgroundColor: '#F06292', 
+    borderColor: '#D81B60', 
+    transform: [{ scale: 1.05 }], 
   },
   flowButtonText: {
-    color: '#880E4F',
-    fontWeight: '500'
+    color: '#880E4F', 
+    fontWeight: '500',
+    fontSize: 13, 
   },
   button: {
-    paddingVertical: 15,
-    borderRadius: 25,
-    width: '100%',
+    paddingVertical: 14, 
+    borderRadius: 30, 
+    width: '90%', 
     alignItems: 'center',
+    alignSelf: 'center', 
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
-    elevation: 3
+    elevation: 4 
   },
   startButton: {
-    backgroundColor: '#4CAF50'
+    backgroundColor: '#4CAF50', 
   },
   endButton: {
-    backgroundColor: '#F44336'
+    backgroundColor: '#F44336', 
+    marginTop: 10, 
   },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16
+  },
+  section: {
+    marginTop: 20,
+    width: '100%',
+    padding: 15,
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 10,
+    marginBottom: 15, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  sectionTitle: {
+    fontSize: 18, 
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#D81B60' 
+  },
+  symptomButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start', 
+  },
+  symptomButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    margin: 5,
+    backgroundColor: '#E1BEE7', 
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CE93D8'
+  },
+  symptomButtonSelected: {
+    backgroundColor: '#BA68C8', 
+    borderColor: '#9C27B0',
+  },
+  symptomButtonText: {
+    color: '#6A1B9A', 
+    fontSize: 13,
+  },
+  moodButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', 
+    justifyContent: 'space-around', 
+  },
+  moodButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10, 
+    margin: 5, 
+    backgroundColor: '#BBDEFB', 
+    borderRadius: 20,
+    minWidth: '30%', 
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#90CAF9'
+  },
+  moodButtonSelected: {
+    backgroundColor: '#64B5F6', 
+    borderColor: '#2196F3',
+  },
+  moodButtonText: {
+      color: '#0D47A1', 
+      fontSize: 13,
+      textAlign: 'center'
+  },
+  insightsContainer: {
+    marginTop: 25, 
+    padding: 20, 
+    backgroundColor: '#E8F5E9', 
+    borderRadius: 10,
+    width: '100%',
+  },
+  insightsTitle: {
+    fontSize: 20, 
+    fontWeight: 'bold',
+    marginBottom: 15, 
+    color: '#2E7D32', 
+    textAlign: 'center',
+  },
+  insightsSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#388E3C', 
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  insightItem: {
+    fontSize: 15,
+    color: '#1B5E20', 
+    marginBottom: 5,
+    paddingLeft: 10, 
   }
 });
 
