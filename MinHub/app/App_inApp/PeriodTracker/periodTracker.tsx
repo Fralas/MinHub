@@ -3,7 +3,6 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   SafeAreaView,
@@ -16,10 +15,6 @@ import {
 
 type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
 
-interface DailyLog {
-  date: string;
-  flow?: FlowIntensity;
-}
 
 interface PeriodData {
   id: string;
@@ -53,9 +48,6 @@ interface DailyLog {
   mood?: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'very_sad';
 }
 
-
-
-
 const calculateAverage = (values: number[]): number => {
   if (values.length === 0) return 0;
   const sum = values.reduce((a, b) => a + b, 0);
@@ -84,9 +76,6 @@ const getAverageCycleLength = (periods: PeriodData[]): number => {
   
   return calculateAverage(cycleLengths) || 28;
 };
-
-
-
 
 const getAveragePeriodLength = (periods: PeriodData[]): number => {
   const periodLengths: number[] = [];
@@ -317,7 +306,7 @@ const PeriodTrackerScreen = () => {
       setDatePickerTarget(null);
     }
   };
-    -----
+
   const logFlow = async (flow: FlowIntensity) => {
     if (!currentActivePeriod) return;
     
@@ -333,6 +322,8 @@ const PeriodTrackerScreen = () => {
     } else {
       updatedLogs.push({ date: today, flow });
     }
+    updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
 
     const updatedPeriod = {
       ...currentActivePeriod,
@@ -349,26 +340,47 @@ const PeriodTrackerScreen = () => {
   };
 
   const getPrediction = () => {
-    if (!periods.length) return "Register your first period";
+    if (!periods.length || periods.every(p => p.endDate === null && p.id !== currentActivePeriod?.id)) return "Register your first period";
     if (currentActivePeriod) return "Currently on period";
     
-    const lastPeriod = periods[0];
-    const lastStart = new Date(lastPeriod.startDate);
-    const nextStart = new Date(lastStart);
-    nextStart.setDate(lastStart.getDate() + settings.averageCycleLength);
+    const lastCompletedPeriod = periods.find(p => p.endDate !== null); 
+    
+    if (!lastCompletedPeriod) { 
+        const earliestPeriod = periods[0]; 
+        if (!earliestPeriod) return "Log a period to see predictions."; 
+        
+        const lastStart = new Date(earliestPeriod.startDate);
+        const nextStart = new Date(lastStart);
+        nextStart.setDate(lastStart.getDate() + settings.averageCycleLength);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        nextStart.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.round((nextStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
+        if (diffDays === 0) return "Period expected today!";
+        if (diffDays === 1) return "Period expected tomorrow";
+        return `Period expected in ${diffDays} days`;
+    }
+
+
+    const lastStartDate = new Date(lastCompletedPeriod.startDate); 
+    const nextPredictedStartDate = new Date(lastStartDate);
+    nextPredictedStartDate.setDate(lastStartDate.getDate() + settings.averageCycleLength);
     
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    nextStart.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0); 
+    nextPredictedStartDate.setHours(0, 0, 0, 0);
     
-    const diffDays = Math.round((nextStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round((nextPredictedStartDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
     if (diffDays === 0) return "Period expected today!";
     if (diffDays === 1) return "Period expected tomorrow";
-    return `Period expected in ${diffDays} days`;
+    return `Next period expected in ${diffDays} days`;
   };
-  
 
   const getCurrentDay = () => {
     if (!currentActivePeriod) return "No active period";
@@ -391,10 +403,11 @@ const PeriodTrackerScreen = () => {
   const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
   
   let dailyLog = updatedLogs.find(log => log.date === today);
-  if (!dailyLog) {
-    dailyLog = { date: today };
-    updatedLogs.push(dailyLog);
-  }
+    if (!dailyLog) {
+      dailyLog = { date: today, symptoms: [] }; 
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
 
   if (!dailyLog.symptoms) {
     dailyLog.symptoms = [];
@@ -428,10 +441,13 @@ const addNote = async (note: string) => {
   const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
   
   let dailyLog = updatedLogs.find(log => log.date === today);
-  if (!dailyLog) {
-    dailyLog = { date: today };
-    updatedLogs.push(dailyLog);
-  }
+    if (!dailyLog) {
+      dailyLog = { date: today };
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+        dailyLog.notes = note;
 
 
   const updatedPeriod = {
@@ -439,13 +455,13 @@ const addNote = async (note: string) => {
     dailyLogs: updatedLogs
   };
 
-  const updatedPeriods = periods.map(p => 
-    p.id === currentActivePeriod.id ? updatedPeriod : p
-  );
+    const updatedPeriodsList = periods.map(p => 
+      p.id === currentActivePeriod.id ? updatedPeriod : p
+    );
 
-  setPeriods(updatedPeriods);
+  setPeriods(updatedPeriodsList);
   setCurrentActivePeriod(updatedPeriod);
-  await savePeriods(updatedPeriods);
+  await savePeriods(updatedPeriodsList);
 };
 
 
@@ -455,11 +471,12 @@ const trackMood = async (mood: DailyLog['mood']) => {
   const today = formatDateToYYYYMMDD(new Date());
   const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
   
-  let dailyLog = updatedLogs.find(log => log.date === today);
-  if (!dailyLog) {
-    dailyLog = { date: today };
-    updatedLogs.push(dailyLog);
-  }
+    let dailyLog = updatedLogs.find(log => log.date === today);
+    if (!dailyLog) {
+      dailyLog = { date: today };
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
 
   dailyLog.mood = mood;
 
@@ -482,7 +499,6 @@ const getCycleInsights = () => {
 
   const completedPeriods = periods.filter(p => p.endDate);
   
-  // 1. Analisi sintomi ricorrenti
   const symptomMap: Record<string, {count: number, days: number}> = {};
   
   completedPeriods.forEach(period => {
@@ -501,10 +517,12 @@ const getCycleInsights = () => {
 
   let positiveDays = 0;
   let negativeDays = 0;
+  let totalMoodDays = 0; 
   
   completedPeriods.forEach(period => {
     period.dailyLogs?.forEach(log => {
       if (log.mood) {
+        totalMoodDays++;
         if (log.mood === 'very_happy' || log.mood === 'happy') positiveDays++;
         if (log.mood === 'sad' || log.mood === 'very_sad') negativeDays++;
       }
@@ -514,10 +532,12 @@ const getCycleInsights = () => {
   return {
     frequentSymptoms: Object.entries(symptomMap)
       .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 3),
+      .slice(0, 3)
+      .map(([name, data]) => ({ name, ...data })),
     moodBalance: {
       positive: positiveDays,
-      negative: negativeDays
+      negative: negativeDays,
+      total: totalMoodDays 
     },
     averageCycleLength: settings.averageCycleLength,
     averagePeriodLength: settings.averagePeriodLength
@@ -525,7 +545,7 @@ const getCycleInsights = () => {
 };
 
 const getFlowStatistics = () => {
-  const flowStats = {
+  const flowStats: Record<FlowIntensity, number> = {
     spotting: 0,
     light: 0,
     medium: 0,
@@ -539,8 +559,9 @@ const getFlowStatistics = () => {
       }
     });
   });
-
-  
+  return flowStats;
+};
+  const cycleInsights = getCycleInsights();
 
   return (
     <SafeAreaView style={styles.safeArea}>
