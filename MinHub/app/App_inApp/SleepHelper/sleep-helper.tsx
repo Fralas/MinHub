@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, FlatList, StyleSheet, ScrollView, Button } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import SleepStatistics from './sleepstatistics';
+import { useRouter } from 'expo-router';
 
 const STORAGE_KEY = 'SLEEP_LOGS';
 
@@ -14,6 +14,7 @@ type SleepLog = {
 
 export default function SleepHelper() {
   const [sleepData, setSleepData] = useState<SleepLog[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,6 +48,7 @@ export default function SleepHelper() {
 
   return (
     <ScrollView style={styles.container}>
+      <Button title="View Statistics" onPress={() => router.push("/App_inApp/SleepHelper/sleep-statistics")} />
       <FlatList
         data={sleepData}
         keyExtractor={(item) => item.day}
@@ -54,7 +56,6 @@ export default function SleepHelper() {
         scrollEnabled={false}
         contentContainerStyle={styles.list}
       />
-      <SleepStatistics />
     </ScrollView>
   );
 }

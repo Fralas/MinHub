@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = 'SLEEP_LOGS';
 
-export default function SleepStatistics() {
+export default function SleepStatisticsScreen() {
   const [totalHours, setTotalHours] = useState(0);
   const [averageHours, setAverageHours] = useState(0);
 
@@ -14,8 +14,8 @@ export default function SleepStatistics() {
       if (stored) {
         const data = JSON.parse(stored);
         const numericHours: number[] = data
-        .map((entry: { hours: string }) => parseFloat(entry.hours))
-        .filter((h: number): h is number => !isNaN(h));
+          .map((entry: { hours: string }) => parseFloat(entry.hours))
+          .filter((h: number): h is number => !isNaN(h));
         const total = numericHours.reduce((sum: number, h: number) => sum + h, 0);
         const average = numericHours.length > 0 ? total / numericHours.length : 0;
         setTotalHours(total);
@@ -36,16 +36,16 @@ export default function SleepStatistics() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
-    padding: 16,
+    margin: 20,
+    padding: 20,
     borderWidth: 2,
     borderColor: '#000',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#f0f0f0',
   },
   header: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 10,
   },
 });

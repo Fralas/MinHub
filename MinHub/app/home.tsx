@@ -91,7 +91,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
-        <Link href="/App_inApp/SleepHelper/sleephelper" asChild>
+        <Link href="/App_inApp/SleepHelper/sleep-helper" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Sleep Helper</Text>
           </TouchableOpacity>
