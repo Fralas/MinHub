@@ -40,6 +40,22 @@ const formatDateToYYYYMMDD = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+interface Symptom {
+  name: string;
+  intensity: 'mild' | 'moderate' | 'severe';
+}
+
+interface DailyLog {
+  date: string;
+  flow?: FlowIntensity;
+  symptoms?: Symptom[];
+  notes?: string;
+  mood?: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'very_sad';
+}
+
+
+
+
 const calculateAverage = (values: number[]): number => {
   if (values.length === 0) return 0;
   const sum = values.reduce((a, b) => a + b, 0);
@@ -68,6 +84,9 @@ const getAverageCycleLength = (periods: PeriodData[]): number => {
   
   return calculateAverage(cycleLengths) || 28;
 };
+
+
+
 
 const getAveragePeriodLength = (periods: PeriodData[]): number => {
   const periodLengths: number[] = [];
@@ -313,6 +332,7 @@ const PeriodTrackerScreen = () => {
     if (diffDays === 1) return "Period expected tomorrow";
     return `Period expected in ${diffDays} days`;
   };
+  
 
   const getCurrentDay = () => {
     if (!currentActivePeriod) return "No active period";
@@ -325,6 +345,76 @@ const PeriodTrackerScreen = () => {
     const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return `Day ${diffDays} of cycle`;
   };
+
+
+
+  const trackSymptom = async (symptom: Symptom) => {
+  if (!currentActivePeriod) return;
+  
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+  let dailyLog = updatedLogs.find(log => log.date === today);
+  if (!dailyLog) {
+    dailyLog = { date: today };
+    updatedLogs.push(dailyLog);
+  }
+
+  if (!dailyLog.symptoms) {
+    dailyLog.symptoms = [];
+  }
+
+  const existingIndex = dailyLog.symptoms.findIndex(s => s.name === symptom.name);
+  if (existingIndex >= 0) {
+    dailyLog.symptoms[existingIndex] = symptom;
+  } else {
+    dailyLog.symptoms.push(symptom);
+  }
+
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+  const updatedPeriods = periods.map(p => 
+    p.id === currentActivePeriod.id ? updatedPeriod : p
+  );
+
+  setPeriods(updatedPeriods);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriods);
+};
+
+const addNote = async (note: string) => {
+  if (!currentActivePeriod) return;
+  
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+  let dailyLog = updatedLogs.find(log => log.date === today);
+  if (!dailyLog) {
+    dailyLog = { date: today };
+    updatedLogs.push(dailyLog);
+  }
+
+
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+  const updatedPeriods = periods.map(p => 
+    p.id === currentActivePeriod.id ? updatedPeriod : p
+  );
+
+  setPeriods(updatedPeriods);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriods);
+};
+
+
+
+
 
   if (isLoading) {
     return (
