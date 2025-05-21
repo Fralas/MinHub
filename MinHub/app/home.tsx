@@ -31,6 +31,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/StudyPlanner/studyPlanner" asChild>
++          <TouchableOpacity style={styles.iconButton}>
++            <Text style={styles.iconText}>Study Planner</Text>
++          </TouchableOpacity>
++        </Link>
+
         <Link href="/App_inApp/Meditation/guided-meditations" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Meditation</Text>

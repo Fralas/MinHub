@@ -26,6 +26,10 @@ export default function AppLayout() {
         name="App_inApp/Meditation/meditation-player/[id]"
         options={{ title: 'Meditazione' }}
       />
+      <Stack.Screen
+        name="App_inApp/StudyPlanner/studyPlanner"
+        options={{ title: 'Piattaforma Studio' }}
+      />
     </Stack>
   );
 }
