@@ -6,7 +6,7 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#00796B',
+          backgroundColor: '#00796B', // Main app header color
         },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: {
@@ -14,9 +14,10 @@ export default function AppLayout() {
         },
       }}
     >
+      {/* Main App Screens */}
       <Stack.Screen
         name="index"
-        options={{ title: 'App Meditazione' }}
+        options={{ title: 'App Meditazione (Main)' }} // Renamed for clarity
       />
       <Stack.Screen
         name="App_inApp/Meditation/guided-meditations"
@@ -27,15 +28,7 @@ export default function AppLayout() {
         options={{ title: 'Meditazione' }}
       />
 
-      {/* Sleephelper app */}
-      <Stack.Screen
-        name="sleep-helper"
-        options={{ title: 'Sleep Helper' }}
-      />
-      <Stack.Screen
-        name="sleep-statistics"
-        options={{ title: 'Statistiche Sonno' }}
-      />
+      <Stack.Screen name="App_inApp/SleepHelper" options={{ headerShown: false }} />
     </Stack>
   );
 }

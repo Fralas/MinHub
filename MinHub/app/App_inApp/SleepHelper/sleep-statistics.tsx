@@ -1,28 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSleep } from './SleepContext'; 
 
-const STORAGE_KEY = 'SLEEP_LOGS';
 const IDEAL_SLEEP = 8;
 
-type SleepLog = {
-  day: string;
-  hours: string;
-};
-
-type WeekData = Record<string, SleepLog[]>;
-
 export default function SleepStatisticsScreen() {
+  const { allSleepData } = useSleep();
+
   const [sleepDebtByWeek, setSleepDebtByWeek] = useState<
     { week: string; totalHours: number; average: number; debt: number }[]
   >([]);
 
   useEffect(() => {
-    const loadStats = async () => {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
-
-      const parsed: WeekData = JSON.parse(stored);
+    const calculateStats = () => {
       const results: {
         week: string;
         totalHours: number;
@@ -30,7 +20,7 @@ export default function SleepStatisticsScreen() {
         debt: number;
       }[] = [];
 
-      for (const [week, logs] of Object.entries(parsed)) {
+      for (const [week, logs] of Object.entries(allSleepData)) {
         const numericHours = logs
           .map((entry) => parseFloat(entry.hours))
           .filter((h) => !isNaN(h));
@@ -39,7 +29,7 @@ export default function SleepStatisticsScreen() {
 
         const total = numericHours.reduce((sum, h) => sum + h, 0);
         const average = total / numericHours.length;
-        const debt = Math.max(0, IDEAL_SLEEP * 7 - total); // Weekly sleep debt
+        const debt = Math.max(0, IDEAL_SLEEP * 7 - total);
 
         results.push({
           week,
@@ -49,11 +39,12 @@ export default function SleepStatisticsScreen() {
         });
       }
 
+      results.sort((a, b) => (a.week > b.week ? -1 : 1));
       setSleepDebtByWeek(results);
     };
 
-    loadStats();
-  }, []);
+    calculateStats();
+  }, [allSleepData]);
 
   return (
     <ScrollView style={styles.container}>
