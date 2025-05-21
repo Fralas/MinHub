@@ -28,7 +28,7 @@ export default function AppLayout() {
       />
       <Stack.Screen
         name="App_inApp/StudyPlanner/studyPlanner"
-        options={{ title: 'Piattaforma Studio' }}
+        options={{ title: 'Study Planner' }}
       />
     </Stack>
   );
