@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  StyleSheet,
-  ScrollView,
-  Button,
-} from 'react-native';
+import { View, Text, TextInput, FlatList, StyleSheet, ScrollView, Button } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
@@ -22,58 +14,55 @@ type SleepLog = {
 
 type WeekData = Record<string, SleepLog[]>;
 
-//Helper to get current ISO-like week identifier
-function getWeekId(): string {
+function getCurrentWeekId(): string {
   const now = new Date();
-  const year = now.getFullYear();
-
-  const janFirst = new Date(year, 0, 1);
-  const daysSinceStart = Math.floor(
-    (now.getTime() - janFirst.getTime()) / (24 * 60 * 60 * 1000)
-  );
-  const week = Math.ceil((daysSinceStart + janFirst.getDay() + 1) / 7);
-
-  return `${year}-W${week.toString().padStart(2, '0')}`;
+  const firstJan = new Date(now.getFullYear(), 0, 1);
+  const pastDaysOfYear = (now.getTime() - firstJan.getTime()) / 86400000;
+  const weekNumber = Math.ceil((pastDaysOfYear + firstJan.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
 }
 
 export default function SleepHelper() {
   const [sleepData, setSleepData] = useState<SleepLog[]>([]);
-  const [currentWeekId, setCurrentWeekId] = useState(getWeekId());
   const router = useRouter();
+  const [allData, setAllData] = useState<WeekData>({});
+  const currentWeekId = getCurrentWeekId();
 
   useEffect(() => {
     const loadData = async () => {
-      const weekId = getWeekId();
-      setCurrentWeekId(weekId);
-
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      const allData: WeekData = stored ? JSON.parse(stored) : {};
-
-      if (allData[weekId]) {
-        setSleepData(allData[weekId]);
+      if (stored) {
+        const parsed: WeekData = JSON.parse(stored);
+        setAllData(parsed);
+        setSleepData(parsed[currentWeekId] || daysOfWeek.map(day => ({ day, hours: '' })));
       } else {
-        //Initialize week with empty hours
-        const initialData = daysOfWeek.map(day => ({ day, hours: '' }));
-        allData[weekId] = initialData;
-        setSleepData(initialData);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+        setSleepData(daysOfWeek.map(day => ({ day, hours: '' })));
       }
     };
-
     loadData();
   }, []);
 
   const handleChange = async (day: string, value: string) => {
-    const updated = sleepData.map(entry =>
+    const updatedWeek = sleepData.map(entry =>
       entry.day === day ? { ...entry, hours: value } : entry
     );
-    setSleepData(updated);
+    setSleepData(updatedWeek);
 
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    const allData: WeekData = stored ? JSON.parse(stored) : {};
+    const updatedAllData = {
+      ...allData,
+      [currentWeekId]: updatedWeek,
+    };
+    setAllData(updatedAllData);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedAllData));
+  };
 
-    allData[currentWeekId] = updated;
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+  const handleSave = async () => {
+    const updatedAllData = {
+      ...allData,
+      [currentWeekId]: sleepData,
+    };
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedAllData));
+    setAllData(updatedAllData);
   };
 
   const renderItem = ({ item }: { item: SleepLog }) => (
@@ -94,10 +83,17 @@ export default function SleepHelper() {
       <View style={styles.statsButtonContainer}>
         <Button
           title="View Statistics"
-          onPress={() => router.push('/App_inApp/SleepHelper/sleep-statistics')}
+          onPress={() => router.push("/App_inApp/SleepHelper/sleep-statistics")}
         />
-        <Text style={styles.weekText}>Week: {currentWeekId}</Text>
       </View>
+
+      <Text style={styles.weekText}>Week: {currentWeekId}</Text>
+
+      {/* Moved Save Button Up */}
+      <View style={styles.saveButtonContainer}>
+        <Button title="Save Sleep Data" onPress={handleSave} />
+      </View>
+
       <FlatList
         data={sleepData}
         keyExtractor={(item) => item.day}
@@ -121,9 +117,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   weekText: {
-    marginTop: 10,
     fontSize: 16,
-    fontStyle: 'italic',
+    marginVertical: 10,
+    fontWeight: 'bold',
+  },
+  saveButtonContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 10,
   },
   list: {
     paddingBottom: 20,

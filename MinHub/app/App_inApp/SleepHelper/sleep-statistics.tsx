@@ -13,8 +13,8 @@ type SleepLog = {
 type WeekData = Record<string, SleepLog[]>;
 
 export default function SleepStatisticsScreen() {
-  const [weeklySummaries, setWeeklySummaries] = useState<
-    { week: string; total: number; debt: number; daily: { day: string; slept: number; debt: number }[] }[]
+  const [sleepDebtByWeek, setSleepDebtByWeek] = useState<
+    { week: string; totalHours: number; average: number; debt: number }[]
   >([]);
 
   useEffect(() => {
@@ -23,25 +23,33 @@ export default function SleepStatisticsScreen() {
       if (!stored) return;
 
       const parsed: WeekData = JSON.parse(stored);
-      const summaries = Object.entries(parsed).map(([week, logs]) => {
-        const daily = logs.map(entry => {
-          const slept = parseFloat(entry.hours);
-          const validSlept = isNaN(slept) ? 0 : slept;
-          const debt = Math.max(0, IDEAL_SLEEP - validSlept);
-          return {
-            day: entry.day,
-            slept: validSlept,
-            debt,
-          };
+      const results: {
+        week: string;
+        totalHours: number;
+        average: number;
+        debt: number;
+      }[] = [];
+
+      for (const [week, logs] of Object.entries(parsed)) {
+        const numericHours = logs
+          .map((entry) => parseFloat(entry.hours))
+          .filter((h) => !isNaN(h));
+
+        if (numericHours.length === 0) continue;
+
+        const total = numericHours.reduce((sum, h) => sum + h, 0);
+        const average = total / numericHours.length;
+        const debt = Math.max(0, IDEAL_SLEEP * 7 - total); // Weekly sleep debt
+
+        results.push({
+          week,
+          totalHours: total,
+          average,
+          debt,
         });
+      }
 
-        const total = daily.reduce((sum, d) => sum + d.slept, 0);
-        const debt = daily.reduce((sum, d) => sum + d.debt, 0);
-
-        return { week, total, debt, daily };
-      });
-
-      setWeeklySummaries(summaries);
+      setSleepDebtByWeek(results);
     };
 
     loadStats();
@@ -50,19 +58,18 @@ export default function SleepStatisticsScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>Sleep Debt Breakdown</Text>
-      {weeklySummaries.map(summary => (
-        <View key={summary.week} style={styles.weekCard}>
-          <Text style={styles.weekHeader}>{summary.week}</Text>
-          <Text>Total Slept: {summary.total.toFixed(1)}h</Text>
-          <Text>Total Debt: {summary.debt.toFixed(1)}h</Text>
-          <Text style={styles.subHeader}>Daily Breakdown:</Text>
-          {summary.daily.map((d, index) => (
-            <Text key={index}>
-              {d.day} – Slept {d.slept}h (Debt: {d.debt}h)
-            </Text>
-          ))}
-        </View>
-      ))}
+      {sleepDebtByWeek.length === 0 ? (
+        <Text>No data available</Text>
+      ) : (
+        sleepDebtByWeek.map((weekData) => (
+          <View key={weekData.week} style={styles.card}>
+            <Text style={styles.week}>Week: {weekData.week}</Text>
+            <Text>Total hours slept: {weekData.totalHours.toFixed(1)}</Text>
+            <Text>Average per day: {weekData.average.toFixed(1)} hrs</Text>
+            <Text>Sleep debt: {weekData.debt.toFixed(1)} hrs</Text>
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 }
@@ -70,28 +77,25 @@ export default function SleepStatisticsScreen() {
 const styles = StyleSheet.create({
   container: {
     margin: 20,
-    padding: 10,
+    padding: 20,
     backgroundColor: '#fff',
   },
   header: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  weekCard: {
+  card: {
     borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 20,
-    backgroundColor: '#f0f0f0',
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 16,
+    backgroundColor: '#f8f8f8',
   },
-  weekHeader: {
-    fontSize: 18,
+  week: {
     fontWeight: 'bold',
-  },
-  subHeader: {
-    marginTop: 10,
-    fontWeight: '600',
+    marginBottom: 6,
+    fontSize: 16,
   },
 });
