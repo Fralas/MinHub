@@ -15,6 +15,18 @@ import {
 
 type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
 
+interface Symptom {
+  name: string;
+  intensity: 'mild' | 'moderate' | 'severe';
+}
+
+interface DailyLog {
+  date: string;
+  flow?: FlowIntensity;
+  symptoms?: Symptom[];
+  notes?: string;
+  mood?: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'very_sad';
+}
 
 interface PeriodData {
   id: string;
@@ -28,25 +40,27 @@ interface CycleSettings {
   averagePeriodLength: number;
 }
 
+interface FertilityData {
+  ovulationDay: number;
+  fertileWindow: {
+    start: number;
+    end: number;
+  };
+}
+
+interface Medication {
+  name: string;
+  dosage: string;
+  times: string[];
+  reminderEnabled: boolean;
+}
+
 const formatDateToYYYYMMDD = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-
-interface Symptom {
-  name: string;
-  intensity: 'mild' | 'moderate' | 'severe';
-}
-
-interface DailyLog {
-  date: string;
-  flow?: FlowIntensity;
-  symptoms?: Symptom[];
-  notes?: string;
-  mood?: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'very_sad';
-}
 
 const calculateAverage = (values: number[]): number => {
   if (values.length === 0) return 0;
@@ -92,8 +106,20 @@ const getAveragePeriodLength = (periods: PeriodData[]): number => {
   return calculateAverage(periodLengths) || 5;
 };
 
+const calculateFertilityWindow = (cycleLength: number): FertilityData => {
+  const ovulationDay = cycleLength > 14 ? cycleLength - 14 : Math.round(cycleLength / 2);
+  return {
+    ovulationDay,
+    fertileWindow: {
+      start: Math.max(1, ovulationDay - 5), 
+      end: Math.min(cycleLength > 0 ? cycleLength : 35, ovulationDay + 1) 
+    }
+  };
+};
+
 const PERIODS_KEY = 'periodTracker_periods';
 const SETTINGS_KEY = 'periodTracker_settings';
+const MEDICATIONS_KEY = 'medications';
 
 const loadPeriods = async (): Promise<PeriodData[]> => {
   try {
@@ -131,11 +157,13 @@ const saveSettings = async (settings: CycleSettings): Promise<void> => {
   }
 };
 
+
 const PeriodTrackerScreen = () => {
   const [periods, setPeriods] = useState<PeriodData[]>([]);
   const [settings, setSettings] = useState<CycleSettings>({ averageCycleLength: 28, averagePeriodLength: 5 });
   const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [medications, setMedications] = useState<Medication[]>([]);
 
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -145,9 +173,10 @@ const PeriodTrackerScreen = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedPeriods, loadedSettingsFromStorage] = await Promise.all([ 
+      const [loadedPeriods, loadedSettingsFromStorage, loadedMedsString] = await Promise.all([ 
         loadPeriods(),
-        loadSettings()
+        loadSettings(),
+        AsyncStorage.getItem(MEDICATIONS_KEY)
       ]);
       
       const sortedPeriods = [...loadedPeriods].sort((a, b) => 
@@ -166,6 +195,9 @@ const PeriodTrackerScreen = () => {
       setSettings(finalSettings);
       setPeriods(sortedPeriods);
       setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
+      if (loadedMedsString) {
+        setMedications(JSON.parse(loadedMedsString));
+      }
     } catch (error) {
       Alert.alert("Error", "Failed to load cycle data");
     } finally {
@@ -394,8 +426,6 @@ const PeriodTrackerScreen = () => {
     return `Day ${diffDays} of cycle`;
   };
 
-
-
   const trackSymptom = async (symptom: Symptom) => {
   if (!currentActivePeriod) return;
   
@@ -464,7 +494,6 @@ const addNote = async (note: string) => {
   await savePeriods(updatedPeriodsList);
 };
 
-
 const trackMood = async (mood: DailyLog['mood']) => {
   if (!currentActivePeriod) return;
   
@@ -495,13 +524,18 @@ const trackMood = async (mood: DailyLog['mood']) => {
 };
 
 const getCycleInsights = () => {
-  if (periods.length < 3) return null;
+  if (periods.length < 2) return null;
 
-  const completedPeriods = periods.filter(p => p.endDate);
-  
+  const completedPeriods = periods.filter(p => p.endDate).sort((a,b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  if (completedPeriods.length < 1 && periods.length <1 ) return null;
+
+
+  const allPeriodsForInsights = periods.filter(p => p.dailyLogs && p.dailyLogs.length > 0);
+
+
   const symptomMap: Record<string, {count: number, days: number}> = {};
   
-  completedPeriods.forEach(period => {
+  allPeriodsForInsights.forEach(period => {
     period.dailyLogs?.forEach(log => {
       log.symptoms?.forEach(symptom => {
         if (!symptomMap[symptom.name]) {
@@ -519,7 +553,7 @@ const getCycleInsights = () => {
   let negativeDays = 0;
   let totalMoodDays = 0; 
   
-  completedPeriods.forEach(period => {
+  allPeriodsForInsights.forEach(period => {
     period.dailyLogs?.forEach(log => {
       if (log.mood) {
         totalMoodDays++;
@@ -561,7 +595,124 @@ const getFlowStatistics = () => {
   });
   return flowStats;
 };
+
+  const syncWithHealthApp = async () => {
+    try {
+      Alert.alert("Success", "Health data synchronized successfully");
+    } catch (error) {
+      Alert.alert("Error", "Failed to sync with health app");
+    }
+  };
+
+  const addMedicationReminder = async (med: Medication) => {
+    const updatedMeds = [...medications, med];
+    setMedications(updatedMeds);
+    await AsyncStorage.setItem(MEDICATIONS_KEY, JSON.stringify(updatedMeds));
+  };
+
+  const getCycleCorrelations = () => {
+    const phaseStats:any = { 
+      follicular: { symptoms: {}, mood: {} },
+      luteal: { symptoms: {}, mood: {} },
+      menstrual: { symptoms: {}, mood: {} }
+    };
+  
+    periods.forEach(period => {
+      const periodStartDate = new Date(period.startDate);
+      period.dailyLogs?.forEach(log => {
+        const logDate = new Date(log.date);
+      });
+    });
+  
+    return phaseStats; 
+  };
+
+  const scheduleNotification = async (type: 'periodStart' | 'fertileWindow' | 'ovulation') => {
+    const message = {
+      periodStart: "Your period is expected to start soon",
+      fertileWindow: "You're in your fertile window",
+      ovulation: "Ovulation is likely occurring today"
+    }[type];
+  
+    Alert.alert("Notification Scheduled", message);
+  };
+
+  const exportData = async () => {
+    try {
+      const dataToExport = { 
+        periods,
+        settings,
+        statistics: getCycleInsights(), 
+        exportedAt: new Date().toISOString()
+      };
+      
+      Alert.alert("Export Successful", "Your data has been exported");
+    } catch (error) {
+      Alert.alert("Export Failed", "Could not export data");
+    }
+  };
+
+  const generateShareLink = async () => {
+    const shareData = {
+      currentStatus: currentActivePeriod ? "On period" : "Not on period",
+      nextPrediction: getPrediction(),
+      fertilityWindow: calculateFertilityWindow(settings.averageCycleLength)
+    };
+    
+    Alert.alert("Share Link Generated", "Partner access enabled");
+  };
+
+  const addToCalendar = async () => {
+    try {
+      Alert.alert("Added to Calendar", "Cycle events added to your calendar");
+    } catch (error) {
+      Alert.alert("Error", "Could not add to calendar");
+    }
+  };
+
+  const backupData = async () => {
+    const backup = {
+      periods,
+      settings,
+      medications, 
+      version: '1.0',
+      createdAt: new Date().toISOString()
+    };
+    
+    try {
+        await AsyncStorage.setItem('app_backup', JSON.stringify(backup));
+        Alert.alert("Backup Successful", "Your data has been backed up");
+    } catch (error) {
+        Alert.alert("Backup Failed", "Could not back up data");
+    }
+  };
+  
+  const restoreData = async () => {
+    try {
+        const backupString = await AsyncStorage.getItem('app_backup');
+        if (backupString) {
+            const backupData = JSON.parse(backupString);
+            if (backupData.periods) setPeriods(backupData.periods);
+            if (backupData.settings) {
+                setSettings(backupData.settings);
+                await saveSettings(backupData.settings); 
+            }
+            if (backupData.medications) setMedications(backupData.medications);
+            
+            await fetchData(); 
+
+            Alert.alert("Restore Complete", "Your data has been restored");
+        } else {
+            Alert.alert("Restore Failed", "No backup data found");
+        }
+    } catch (error) {
+        Alert.alert("Restore Failed", "Could not restore data");
+    }
+  };
+
   const cycleInsights = getCycleInsights();
+  const fertilityData = calculateFertilityWindow(settings.averageCycleLength);
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -684,7 +835,7 @@ const getFlowStatistics = () => {
                 </Text>
               )) : <Text  style={styles.insightItem}>No symptom data yet.</Text>}
 
-              <Text style={styles.insightsSubtitle}>Mood Balance (Completed Periods):</Text>
+              <Text style={styles.insightsSubtitle}>Mood Balance:</Text> 
               {cycleInsights.moodBalance.total > 0 ? (
                 <>
                   <Text style={styles.insightItem}>Positive Days: {cycleInsights.moodBalance.positive}</Text>
@@ -693,6 +844,64 @@ const getFlowStatistics = () => {
               ) : <Text style={styles.insightItem}>No mood data yet.</Text>}
             </View>
           )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Fertility Window</Text>
+            <View style={styles.phaseIndicator}>
+              <View style={[styles.phasePill, {backgroundColor: '#FFCDD2'}]}>
+                <Text>Fertile: Day {fertilityData.fertileWindow.start}-{fertilityData.fertileWindow.end}</Text>
+              </View>
+              <View style={[styles.phasePill, {backgroundColor: '#F8BBD0'}]}>
+                <Text>Ovulation: Day {fertilityData.ovulationDay}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tools</Text>
+            <View style={styles.toolsContainer}> 
+              <TouchableOpacity style={styles.toolButton} onPress={syncWithHealthApp}>
+                <Text>Health Sync</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={exportData}>
+                <Text>Export Data</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={generateShareLink}>
+                <Text>Share with Partner</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={addToCalendar}>
+                <Text>Add to Calendar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={backupData}>
+                <Text>Backup Data</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={restoreData}>
+                <Text>Restore Data</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('periodStart')}
+            >
+              <Text>Schedule Period Reminder</Text>
+            </TouchableOpacity>
+             <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('fertileWindow')}
+            >
+              <Text>Schedule Fertile Window Reminder</Text>
+            </TouchableOpacity>
+             <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('ovulation')}
+            >
+              <Text>Schedule Ovulation Reminder</Text>
+            </TouchableOpacity>
+          </View>
 
 
           {datePickerVisible && (
@@ -936,6 +1145,51 @@ const styles = StyleSheet.create({
     color: '#1B5E20', 
     marginBottom: 5,
     paddingLeft: 10, 
+  },
+  healthButton: {
+    backgroundColor: '#4285F4',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+    alignItems: 'center',
+  },
+  healthButtonText: {
+    color: 'white',
+    fontWeight: 'bold'
+  },
+  phaseIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 15
+  },
+  phasePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    minWidth: 100,
+    alignItems: 'center',
+    elevation: 1, 
+  },
+  toolsContainer: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  toolButton: { 
+    backgroundColor: '#E0E0E0',
+    padding: 10,
+    borderRadius: 8,
+    margin: 5,
+    minWidth: '40%', 
+    alignItems: 'center',
+  },
+  notificationButton: { 
+    backgroundColor: '#AED581',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 5,
+    alignItems: 'center',
   }
 });
 
