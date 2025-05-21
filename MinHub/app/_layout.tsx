@@ -29,6 +29,15 @@ export default function AppLayout() {
       />
 
       <Stack.Screen name="App_inApp/SleepHelper" options={{ headerShown: false }} />
+      {/* Sleephelper app */}
+      <Stack.Screen
+        name="sleep-helper"
+        options={{ title: 'Sleep Helper' }}
+      />
+      <Stack.Screen
+        name="sleep-statistics"
+        options={{ title: 'Statistiche Sonno' }}
+      />
     </Stack>
   );
 }

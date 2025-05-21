@@ -31,6 +31,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
 
+        <Link href="/App_inApp/StudyPlanner/studyPlanner" asChild>
+          <TouchableOpacity style={styles.iconButton}>
+            <Text style={styles.iconText}>Study Planner</Text>
+          </TouchableOpacity>
+        </Link>
+
         <Link href="/App_inApp/Meditation/guided-meditations" asChild>
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.iconText}>Meditation</Text>
@@ -113,7 +119,6 @@ export default function HomeScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -128,14 +133,12 @@ const styles = StyleSheet.create({
     marginBottom: 50,
     color: '#2c3e50',
   },
-
   iconContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     flexWrap: 'wrap',
     paddingBottom: 100,
   },
-  
   iconButton: {
     alignItems: 'center',
     justifyContent: 'center',
