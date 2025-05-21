@@ -26,9 +26,14 @@ export default function AppLayout() {
         name="App_inApp/Meditation/meditation-player/[id]"
         options={{ title: 'Meditazione' }}
       />
+      {/* Sleephelper app */}
       <Stack.Screen
-        name="App_inApp/StudyPlanner/studyPlanner"
-        options={{ title: 'Study Planner' }}
+        name="sleep-helper"
+        options={{ title: 'Sleep Helper' }}
+      />
+      <Stack.Screen
+        name="sleep-statistics"
+        options={{ title: 'Statistiche Sonno' }}
       />
     </Stack>
   );
