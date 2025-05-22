@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -12,38 +11,37 @@ import {
   View
 } from 'react-native';
 
-const TUTORIAL_COMPLETED_KEY = 'minhub_tutorial_completed';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const tutorialPagesData = [
   {
     id: '1',
-    title: 'Benvenuto in MinHub!',
-    description: 'La tua nuova app multifunzione per semplificare la vita quotidiana.',
+    title: 'Welcome to MinHub!',
+    description: 'Your new multi-function app to simplify daily life.',
     image: require('../assets/images/tutorialIMG/img1.png'),
   },
   {
     id: '2',
-    title: 'Organizzazione Perfetta',
-    description: 'Gestisci Todo List, Note, Diario e Calendario con facilità.',
+    title: 'Perfect Organization',
+    description: 'Manage Todo Lists, Notes, Diary, and Calendar with ease.',
     image: require('../assets/images/tutorialIMG/img2.png'),
   },
   {
     id: '3',
-    title: 'Benessere e Produttività',
-    description: 'Rilassati con Meditazione, traccia il Sonno e concentrati con Pomodoro.',
+    title: 'Well-being & Productivity',
+    description: 'Relax with Meditation, track Sleep, and focus with Pomodoro.',
     image: require('../assets/images/tutorialIMG/img3.png'),
   },
   {
     id: '4',
-    title: 'Strumenti Utili',
-    description: 'Dal Period Tracker alla Calcolatrice, passando per Liste della Spesa.',
+    title: 'Useful Tools',
+    description: 'From Period Tracker to Calculator, through Shopping Lists.',
     image: require('../assets/images/tutorialIMG/img4.png'),
   },
   {
     id: '5',
-    title: 'Pronto a Cominciare?',
-    description: 'Esplora tutte le funzionalità e personalizza la tua esperienza.',
+    title: 'Ready for the Next Step?',
+    description: 'Complete a short questionnaire to personalize your experience.',
     image: require('../assets/images/tutorialIMG/img5.png'),
   },
 ];
@@ -53,13 +51,8 @@ export default function TutorialScreen() {
   const [currentPage, setCurrentPage] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleCompleteTutorial = async () => {
-    try {
-      await AsyncStorage.setItem(TUTORIAL_COMPLETED_KEY, 'true');
-      router.replace('/home');
-    } catch (e) {
-      router.replace('/home');
-    }
+  const handleGoToQuestionnaire = () => {
+    router.replace('/questionnaire');
   };
 
   const onScroll = (event: any) => {
@@ -75,7 +68,7 @@ export default function TutorialScreen() {
     }
   };
 
-  const renderPage = (page: any, index: number) => (
+  const renderPage = (page: any) => (
     <View key={page.id} style={[styles.pageContainer, { width: screenWidth }]}>
       <Text style={styles.pageTitle}>{page.title}</Text>
       <Image source={page.image} style={styles.pageImage} resizeMode="contain" />
@@ -113,10 +106,10 @@ export default function TutorialScreen() {
 
         <TouchableOpacity
           style={styles.button}
-          onPress={currentPage === tutorialPagesData.length - 1 ? handleCompleteTutorial : goToNextPage}
+          onPress={currentPage === tutorialPagesData.length - 1 ? handleGoToQuestionnaire : goToNextPage}
         >
           <Text style={styles.buttonText}>
-            {currentPage === tutorialPagesData.length - 1 ? "Inizia Ora" : "Avanti"}
+            {currentPage === tutorialPagesData.length - 1 ? "Start Questionnaire" : "Next"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -146,8 +139,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   pageImage: {
-    width: screenWidth * 0.7,
-    height: screenWidth * 0.7,
+    width: screenWidth * 0.6,
+    height: screenWidth * 0.6,
     marginBottom: 25,
   },
   pageDescription: {
@@ -196,7 +189,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
-    minWidth: 180,
+    minWidth: 220,
     alignItems: 'center',
   },
   buttonText: {
