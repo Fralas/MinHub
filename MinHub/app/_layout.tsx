@@ -6,7 +6,7 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#00796B', // Main app header color
+          backgroundColor: '#641E7A', 
         },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: {
@@ -14,10 +14,9 @@ export default function AppLayout() {
         },
       }}
     >
-      {/* Main App Screens */}
       <Stack.Screen
         name="index"
-        options={{ title: 'App Meditazione (Main)' }} // Renamed for clarity
+        options={{ title: 'App Meditazione (Main)' }} 
       />
       <Stack.Screen
         name="App_inApp/Meditation/guided-meditations"

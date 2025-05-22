@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import {
   Dimensions,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -17,31 +18,31 @@ const tutorialPagesData = [
   {
     id: '1',
     title: 'Welcome to MinHub!',
-    description: 'Your new multi-function app to simplify daily life.',
+    description: 'MinHub is your all-in-one lifestyle app, designed to simplify your daily organization and boost personal well-being.',
     image: require('../assets/images/tutorialIMG/img1.png'),
   },
   {
     id: '2',
     title: 'Perfect Organization',
-    description: 'Manage Todo Lists, Notes, Diary, and Calendar with ease.',
+    description: 'Effortlessly manage tasks, notes, appointments, and study plans with our suite of integrated productivity tools..',
     image: require('../assets/images/tutorialIMG/img2.png'),
   },
   {
     id: '3',
     title: 'Well-being & Productivity',
-    description: 'Relax with Meditation, track Sleep, and focus with Pomodoro.',
+    description: 'Nurture your mind and body with dedicated features for meditation, sleep quality, workout tracking, and more..',
     image: require('../assets/images/tutorialIMG/img3.png'),
   },
   {
     id: '4',
     title: 'Useful Tools',
-    description: 'From Period Tracker to Calculator, through Shopping Lists.',
+    description: 'Get a personalized experience by telling us a bit about yourself, helping MinHub tailor its suggestions for you.',
     image: require('../assets/images/tutorialIMG/img4.png'),
   },
   {
     id: '5',
     title: 'Ready for the Next Step?',
-    description: 'Complete a short questionnaire to personalize your experience.',
+    description: 'Our goal is to help you live a more organized, mindful, and productive life, all from a single, easy-to-use platform.',
     image: require('../assets/images/tutorialIMG/img5.png'),
   },
 ];
@@ -78,6 +79,9 @@ export default function TutorialScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <TouchableOpacity style={styles.skipButton} onPress={handleGoToQuestionnaire}>
+        <Text style={styles.skipButtonText}>Skip</Text>
+      </TouchableOpacity>
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -120,7 +124,19 @@ export default function TutorialScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#C5C5EE',
+  },
+  skipButton: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 20 : 10, 
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  skipButtonText: {
+    fontSize: 16,
+    color: '#641E7A',
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
@@ -134,7 +150,7 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#005b4f',
+    color: '#641E7A',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -174,13 +190,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   paginationDotActive: {
-    backgroundColor: '#00796b',
+    backgroundColor: '#641E7A',
     width: 12,
     height: 12,
     borderRadius: 6,
   },
   button: {
-    backgroundColor: '#00796b',
+    backgroundColor: '#641E7A',
     paddingVertical: 14,
     paddingHorizontal: 40,
     borderRadius: 30,

@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   input: {
     width: '80%',
     height: 50,
-    borderColor: '#00796b',
+    borderColor: '#641E7A',
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 15,
@@ -198,17 +198,17 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginVertical: 8,
     borderWidth: 1,
-    borderColor: '#00796b',
+    borderColor: '#641E7A',
     width: '80%',
     alignItems: 'center',
   },
   optionSelected: {
-    backgroundColor: '#00796b',
+    backgroundColor: '#641E7A',
     borderColor: '#004d40',
   },
   optionText: {
     fontSize: 16,
-    color: '#00796b',
+    color: '#641E7A',
     fontWeight: '500',
   },
   optionTextSelected: {
@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
   },
   pagination: { flexDirection: 'row', marginBottom: 20 },
   paginationDot: { height: 10, width: 10, borderRadius: 5, backgroundColor: '#BDBDBD', marginHorizontal: 8 },
-  paginationDotActive: { backgroundColor: '#00796b' },
+  paginationDotActive: { backgroundColor: '#641E7A' },
   button: {
-    backgroundColor: '#00796b',
+    backgroundColor: '#641E7A',
     paddingVertical: 14,
     paddingHorizontal: 50,
     borderRadius: 30,

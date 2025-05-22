@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  Platform,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +15,8 @@ import {
 
 const { width: screenWidth } = Dimensions.get('window');
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
+const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
+
 
 interface UserProfile {
   age: string;
@@ -75,6 +79,17 @@ function useUserProfile() {
 
 export default function HomeScreen() {
   const { userProfile, isLoadingProfile } = useUserProfile();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem(USER_PROFILE_KEY);
+      await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
+      router.replace('/'); 
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
+  };
 
   const personalizedFeatures = useMemo(() => {
     if (!userProfile) {
@@ -103,16 +118,24 @@ export default function HomeScreen() {
   if (isLoadingProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00796b" />
+        <ActivityIndicator size="large" color="#641E7A" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
-      </Text>
+    <SafeAreaView style={styles.safeAreaContainer}>
+      <View style={styles.headerContainer}>
+        <View style={styles.titleContainer}>
+            <Text style={styles.title}>
+            {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
+            </Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
       {userProfile?.profession === '🧑‍🎓 Student' && (
         <Text style={styles.suggestionText}>Student mode: Study tools are prioritized!</Text>
       )}
@@ -126,71 +149,88 @@ export default function HomeScreen() {
           </Link>
         ))}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const numColumns = 2;
-const horizontalPaddingTotal = 70; 
-const gapBetweenItems = 30; 
+const horizontalPaddingTotal = 20;
+const gapBetweenItems = 15;
 const itemWidth = (screenWidth - horizontalPaddingTotal - (gapBetweenItems * (numColumns - 1))) / numColumns;
 
 const styles = StyleSheet.create({
+  safeAreaContainer: { 
+    flex: 1,
+    backgroundColor: '#f0f4f8',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: horizontalPaddingTotal / 2,
+    paddingTop: Platform.OS === 'android' ? 25 : 15,
+    paddingBottom: 10,
+    width: '100%',
+  },
+  titleContainer: {
+    flex: 1, 
+    alignItems: 'center', 
+  },
+  logoutButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  logoutButtonText: {
+    color: '#641E7A', 
+    fontSize: 16,
+    fontWeight: '500',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f0f4f8',
   },
-  container: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 50,
-    backgroundColor: '#f0f4f8',
-  },
   title: {
-    fontSize: 28,
+    fontSize: 24, 
     fontWeight: 'bold',
-    marginBottom: 30,
     color: '#2c3e50',
     textAlign: 'center',
-    paddingHorizontal: 20,
   },
   suggestionText: {
     fontSize: 16,
-    color: '#00796b',
-    marginBottom: 20,
+    color: '#641E7A',
+    marginBottom: 15, 
     textAlign: 'center',
-    paddingHorizontal: 20, 
+    paddingHorizontal: 20,
   },
   iconContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',  
-    paddingHorizontal: horizontalPaddingTotal / 2, 
+    justifyContent: 'space-between',
+    paddingHorizontal: horizontalPaddingTotal / 2,
     paddingBottom: 30,
     width: '100%',
   },
   iconButton: {
     width: itemWidth,
-    height: itemWidth, 
+    height: itemWidth,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: gapBetweenItems, 
-    borderRadius: 12,
+    marginBottom: gapBetweenItems,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#d0dae0',
-    elevation: 3,
+    borderColor: '#dce1e6',
+    elevation: 2,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    padding: 5, 
+    shadowOpacity: 0.08,
+    shadowRadius: 2.5,
+    padding: 8,
   },
   iconText: {
-    fontSize: 18,
+    fontSize: 14,
     color: '#34495e',
     textAlign: 'center',
     fontWeight: '500',
