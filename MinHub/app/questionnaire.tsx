@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
+const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const ProfessionOptions = ["🧑‍🎓 Student", "🧑‍💼 Employed", "🚫 Neither", "🤔 Other"];
@@ -48,7 +49,18 @@ export default function QuestionnaireScreen() {
   ];
 
   const handleCompleteQuestionnaire = async () => {
+    const userProfileData = {
+      age: age,
+      accountName: accountName,
+      profession: profession,
+      email: email,
+      hobbies: selectedHobbies,
+      reasonForUse: reasonForUse,
+      questionnaireCompletedOn: new Date().toISOString(),
+    };
+
     try {
+      await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfileData));
       await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true');
       router.replace('/home');
     } catch (e) {
