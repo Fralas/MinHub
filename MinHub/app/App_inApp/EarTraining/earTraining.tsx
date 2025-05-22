@@ -12,27 +12,39 @@ const NOTES = [
   { name: 'B', file: require('./notes/b6.mp3') },
 ];
 
+type Difficulty = 'Easy' | 'Medium' | 'Hard';
+
 export default function EarTraining() {
   const [currentNote, setCurrentNote] = useState<{ name: string; file: any } | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [options, setOptions] = useState<string[]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [gameStarted, setGameStarted] = useState(false);
+
+  const getOptionCount = (difficulty: Difficulty) => {
+    switch (difficulty) {
+      case 'Easy': return 2;
+      case 'Medium': return 4;
+      case 'Hard': return 7;
+    }
+  };
 
   const generateQuestion = async () => {
+    if (!difficulty) return;
 
     const correct = NOTES[Math.floor(Math.random() * NOTES.length)];
 
+    const optionCount = getOptionCount(difficulty) - 1;
     const shuffled = NOTES
       .filter((note) => note.name !== correct.name)
       .sort(() => 0.5 - Math.random())
-      .slice(0, 3);
+      .slice(0, optionCount);
 
-    // Mix correct with wrong answers
     const choices = [...shuffled.map((n) => n.name), correct.name].sort(() => 0.5 - Math.random());
 
     setCurrentNote(correct);
     setOptions(choices);
 
-    // Play note
     const { sound } = await Audio.Sound.createAsync(correct.file);
     setSound(sound);
     await sound.playAsync();
@@ -44,20 +56,39 @@ export default function EarTraining() {
     } else {
       Alert.alert('Incorrect', `It was ${currentNote?.name}`);
     }
-    generateQuestion(); 
+    generateQuestion();
+  };
+
+  const handleStartGame = (selectedDifficulty: Difficulty) => {
+    setDifficulty(selectedDifficulty);
+    setGameStarted(true);
   };
 
   useEffect(() => {
-    generateQuestion();
+    if (gameStarted) {
+      generateQuestion();
+    }
 
     return () => {
       if (sound) sound.unloadAsync();
     };
-  }, []);
+  }, [gameStarted]);
+
+  if (!gameStarted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>🎼 Ear Training</Text>
+        <Text style={styles.instruction}>Select Difficulty to Start:</Text>
+        <View style={styles.buttonContainer}><Button title="Easy" onPress={() => handleStartGame('Easy')} /></View>
+        <View style={styles.buttonContainer}><Button title="Medium" onPress={() => handleStartGame('Medium')} /></View>
+        <View style={styles.buttonContainer}><Button title="Hard" onPress={() => handleStartGame('Hard')} /></View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎵 Ear Training</Text>
+      <Text style={styles.title}>🎵 Ear Training - {difficulty} Mode</Text>
       <Text style={styles.instruction}>Listen to the note and choose the correct name:</Text>
       {options.map((option) => (
         <View style={styles.buttonContainer} key={option}>
