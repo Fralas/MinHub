@@ -20,6 +20,9 @@ export default function EarTraining() {
   const [options, setOptions] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [maxScore, setMaxScore] = useState(0);
 
   const getOptionCount = (difficulty: Difficulty) => {
     switch (difficulty) {
@@ -53,8 +56,14 @@ export default function EarTraining() {
   const handleAnswer = (answer: string) => {
     if (answer === currentNote?.name) {
       Alert.alert('Correct!', 'Well done!');
+      const newScore = score + 1;
+      setScore(newScore);
+      setStreak(streak + 1);
+      if (newScore > maxScore) setMaxScore(newScore);
     } else {
       Alert.alert('Incorrect', `It was ${currentNote?.name}`);
+      setScore(0);
+      setStreak(0);
     }
     generateQuestion();
   };
@@ -62,6 +71,17 @@ export default function EarTraining() {
   const handleStartGame = (selectedDifficulty: Difficulty) => {
     setDifficulty(selectedDifficulty);
     setGameStarted(true);
+    setScore(0);
+    setStreak(0);
+  };
+
+  const handleBackToMenu = () => {
+    setGameStarted(false);
+    setDifficulty(null);
+    setOptions([]);
+    setCurrentNote(null);
+    setScore(0);
+    setStreak(0);
   };
 
   useEffect(() => {
@@ -89,12 +109,21 @@ export default function EarTraining() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>🎵 Ear Training - {difficulty} Mode</Text>
-      <Text style={styles.instruction}>Listen to the note and choose the correct name:</Text>
+      <Text style={styles.instruction}>Listen and choose the correct note:</Text>
+
+      <Text style={styles.scoreText}>Score: {score}</Text>
+      <Text style={styles.scoreText}>Streak: {streak}</Text>
+      <Text style={styles.scoreText}>Max Score: {maxScore}</Text>
+
       {options.map((option) => (
         <View style={styles.buttonContainer} key={option}>
           <Button title={option} onPress={() => handleAnswer(option)} />
         </View>
       ))}
+
+      <View style={styles.backButton}>
+        <Button title="⬅ Back to Menu" color="#888" onPress={handleBackToMenu} />
+      </View>
     </View>
   );
 }
@@ -115,9 +144,18 @@ const styles = StyleSheet.create({
   instruction: {
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   buttonContainer: {
-    marginVertical: 10,
+    marginVertical: 8,
+  },
+  backButton: {
+    marginTop: 30,
+  },
+  scoreText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 4,
+    fontWeight: '500',
   },
 });
