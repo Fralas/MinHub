@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
@@ -30,10 +31,9 @@ interface UserProfile {
 interface AppFeature {
   id: string;
   name: string;
-  href: string;
+  href: any;
   relevance?: number;
 }
-
 
 const allAppFeatures: AppFeature[] = [
   { id: 'todo', name: 'Todo List', href: '/App_inApp/ToDoList/toDoList' },
@@ -78,6 +78,7 @@ function useUserProfile() {
 }
 
 export default function HomeScreen() {
+  const { theme, isDark } = useTheme();
   const { userProfile, isLoadingProfile } = useUserProfile();
   const router = useRouter();
 
@@ -105,10 +106,12 @@ export default function HomeScreen() {
       .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
   }, [userProfile]);
 
+  const styles = createThemedStyles(theme, isDark);
+
   if (isLoadingProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00796b" />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -121,7 +124,7 @@ export default function HomeScreen() {
         {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
         </Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
-          <Ionicons name="settings-outline" size={24} color="#00796b" />
+          <Ionicons name="settings-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -131,7 +134,7 @@ export default function HomeScreen() {
 
       <ScrollView contentContainerStyle={styles.iconContainer}>
         {personalizedFeatures.map((feature) => (
-          <Link href={feature.href as any} asChild key={feature.id}>
+          <Link href={feature.href} asChild key={feature.id}>
             <TouchableOpacity style={styles.iconButton}>
               <Text style={styles.iconText}>{feature.name}</Text>
             </TouchableOpacity>
@@ -142,83 +145,85 @@ export default function HomeScreen() {
   );
 }
 
-const numColumns = 2;
-const horizontalPaddingTotal = 20;
-const gapBetweenItems = 15;
-const itemWidth = (screenWidth - horizontalPaddingTotal - (gapBetweenItems * (numColumns - 1))) / numColumns;
+const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark: boolean) => {
+  const numColumns = 2;
+  const horizontalPaddingTotal = 20;
+  const gapBetweenItems = 15;
+  const itemWidth = (screenWidth - horizontalPaddingTotal - (gapBetweenItems * (numColumns - 1))) / numColumns;
 
-const styles = StyleSheet.create({
-  safeAreaContainer: {
-    flex: 1,
-    backgroundColor: '#f0f4f8',
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: horizontalPaddingTotal / 2,
-    paddingTop: Platform.OS === 'android' ? 25 : 15,
-    paddingBottom: 10,
-    width: '100%',
-  },
-  titleContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  settingsButton: {
-    padding: 5,
-    zIndex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f4f8',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    textAlign: 'center',
-  },
-  suggestionText: {
-    fontSize: 16,
-    color: '#00796b',
-    marginBottom: 15,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  iconContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: horizontalPaddingTotal / 2,
-    paddingBottom: 30,
-    width: '100%',
-  },
-  iconButton: {
-    width: itemWidth,
-    height: itemWidth,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: gapBetweenItems,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#dce1e6',
-    elevation: 2,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2.5,
-    padding: 8,
-  },
-  iconText: {
-    fontSize: 14,
-    color: '#34495e',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-});
+  return StyleSheet.create({
+    safeAreaContainer: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: horizontalPaddingTotal / 2,
+      paddingTop: Platform.OS === 'android' ? 25 : 15,
+      paddingBottom: 10,
+      width: '100%',
+    },
+    titleContainer: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+    },
+    settingsButton: {
+      padding: 5,
+      zIndex: 1,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.background,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: theme.text,
+      textAlign: 'center',
+    },
+    suggestionText: {
+      fontSize: 16,
+      color: theme.primary,
+      marginBottom: 15,
+      textAlign: 'center',
+      paddingHorizontal: 20,
+    },
+    iconContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      paddingHorizontal: horizontalPaddingTotal / 2,
+      paddingBottom: 30,
+      width: '100%',
+    },
+    iconButton: {
+      width: itemWidth,
+      height: itemWidth,
+      backgroundColor: theme.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: gapBetweenItems,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: theme.border,
+      elevation: 2,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.2 : 0.08,
+      shadowRadius: 2.5,
+      padding: 8,
+    },
+    iconText: {
+      fontSize: 14,
+      color: theme.text,
+      textAlign: 'center',
+      fontWeight: '500',
+    },
+  });
+};
