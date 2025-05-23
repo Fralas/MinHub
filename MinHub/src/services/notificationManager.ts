@@ -3,9 +3,10 @@ import { Platform } from 'react-native';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -41,16 +42,20 @@ export async function scheduleLocalNotification(
 ) {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: title,
-      body: body,
+      title,
+      body,
       data: data || {},
       sound: 'default',
     },
     trigger: {
-      seconds: seconds,
-    },
+  type: 'timeInterval',
+  seconds,
+  repeats: false,
+} as Notifications.NotificationTriggerInput,
+
   });
 }
+
 
 export async function scheduleDailyNotification(
   title: string,
@@ -61,18 +66,20 @@ export async function scheduleDailyNotification(
 ) {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: title,
-      body: body,
+      title,
+      body,
       data: data || {},
       sound: 'default',
     },
     trigger: {
-      hour: hour,
-      minute: minute,
+      hour,
+      minute,
       repeats: true,
-    },
+    } as Notifications.NotificationTriggerInput,
   });
 }
+
+
 
 export async function cancelAllScheduledNotificationsAsync() {
   await Notifications.cancelAllScheduledNotificationsAsync();

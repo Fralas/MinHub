@@ -32,11 +32,11 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <TouchableOpacity style={styles.row}>
+          <TouchableOpacity style={styles.row} onPress={() => { }}>
             <Text style={styles.rowLabel}>Edit Profile</Text>
             <Text style={styles.rowIcon}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.row}>
+          <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
             <Text style={styles.rowLabel}>Notifications</Text>
             <Text style={styles.rowIcon}>›</Text>
           </TouchableOpacity>
@@ -53,6 +53,14 @@ export default function SettingsScreen() {
               thumbColor={isDark ? '#f4f3f4' : '#f4f3f4'}
             />
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Testing</Text>
+          <TouchableOpacity style={styles.row} onPress={() => {
+          }}>
+            <Text style={styles.rowLabel}>Send Test Notification Now</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
