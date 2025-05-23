@@ -15,12 +15,16 @@ export default function EarTrainingLayout() {
       }}
     >
       <Stack.Screen
-        name="MainEarTraining"
+        name="main"
         options={{ title: 'Ear Training' }}
       />
       <Stack.Screen
-        name="Milestones"
+        name="milestones"
         options={{ title: 'Milestones' }}
+      />
+      <Stack.Screen
+        name="speedmode"
+        options={{ title: 'Speed Mode' }}
       />
     </Stack>
   );

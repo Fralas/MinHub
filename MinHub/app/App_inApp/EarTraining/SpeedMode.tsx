@@ -24,12 +24,14 @@ const NOTES = [
   { name: 'B', file: require('./notes/b6.mp3') },
 ];
 
+type GameType = 'easy' | 'medium' | 'hard' | 'speed';
+
 type NavigationProp = NativeStackNavigationProp<EarTrainingStackParamList, 'Main'>;
 
 export default function MainEarTraining() {
   const navigation = useNavigation<NavigationProp>();
 
-  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'speed' | null>(null);
+  const [difficulty, setDifficulty] = useState<GameType | null>(null);
   const [currentNote, setCurrentNote] = useState<{ name: string; file: any } | null>(null);
   const [options, setOptions] = useState<string[]>([]);
   const [streak, setStreak] = useState(0);
@@ -38,14 +40,15 @@ export default function MainEarTraining() {
   const [unlockedMilestones, setUnlockedMilestones] = useState<string[]>([]);
   const [speedScore, setSpeedScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isSpeedModeRunning, setIsSpeedModeRunning] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     loadHighScore();
     return () => {
       soundRef.current?.unloadAsync();
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
@@ -54,15 +57,25 @@ export default function MainEarTraining() {
   }, [streak, maxScore]);
 
   useEffect(() => {
-    if (difficulty === 'speed' && timeLeft > 0) {
-      timerRef.current = setTimeout(() => {
-        setTimeLeft((prev) => prev - 1);
+    if (difficulty === 'speed') {
+      setSpeedScore(0);
+      setTimeLeft(60);
+      setIsSpeedModeRunning(true);
+      generateQuestion();
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            setIsSpeedModeRunning(false);
+            Alert.alert("Time's up!", `You scored ${speedScore} points.`);
+            setDifficulty(null);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (timeLeft === 0 && difficulty === 'speed') {
-      Alert.alert('⏱️ Time’s up!', `You scored ${speedScore} points!`);
-      setDifficulty(null);
     }
-  }, [timeLeft, difficulty]);
+  }, [difficulty]);
 
   const loadHighScore = async () => {
     const stored = await AsyncStorage.getItem('highScore');
@@ -75,6 +88,7 @@ export default function MainEarTraining() {
 
   const checkMilestones = () => {
     const newUnlocked = [...unlockedMilestones];
+
     MILESTONES.forEach(milestone => {
       const alreadyUnlocked = newUnlocked.includes(milestone.id);
       if (!alreadyUnlocked) {
@@ -86,22 +100,28 @@ export default function MainEarTraining() {
         }
       }
     });
+
     setUnlockedMilestones(newUnlocked);
   };
 
   const generateQuestion = async () => {
-    if (soundRef.current) await soundRef.current.unloadAsync();
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync();
+    }
 
-    const correct = NOTES[Math.floor(Math.random() * NOTES.length)];
-    const wrongAnswers = NOTES.filter(n => n.name !== correct.name).sort(() => 0.5 - Math.random());
+    const pool = NOTES;
+    const correct = pool[Math.floor(Math.random() * pool.length)];
+
+    const wrongAnswers = pool.filter(n => n.name !== correct.name)
+      .sort(() => 0.5 - Math.random());
 
     let numChoices = 4;
     if (difficulty === 'easy') numChoices = 2;
-    else if (difficulty === 'medium') numChoices = 3;
+    if (difficulty === 'medium') numChoices = 3;
 
     const choices = [
       ...wrongAnswers.slice(0, numChoices - 1).map(n => n.name),
-      correct.name,
+      correct.name
     ].sort(() => 0.5 - Math.random());
 
     setCurrentNote(correct);
@@ -129,7 +149,7 @@ export default function MainEarTraining() {
       }
     } else {
       if (difficulty === 'speed') {
-        setSpeedScore(prev => Math.max(prev - 1, 0));
+        // No penalty, just next question
       } else {
         Alert.alert('Incorrect', `It was ${currentNote?.name}`);
         setStreak(0);
@@ -139,32 +159,34 @@ export default function MainEarTraining() {
   };
 
   const handleRepeat = async () => {
-    if (currentNote && soundRef.current) {
-      await soundRef.current.replayAsync();
+    if (currentNote) {
+      if (soundRef.current) {
+        await soundRef.current.replayAsync();
+      }
     }
   };
 
   const handlePlayDemo = async (note: typeof NOTES[0]) => {
-    if (soundRef.current) await soundRef.current.unloadAsync();
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync();
+    }
     const { sound } = await Audio.Sound.createAsync(note.file);
     soundRef.current = sound;
     await sound.playAsync();
   };
 
-  const startGame = (selected: 'easy' | 'medium' | 'hard' | 'speed') => {
+  const startGame = (selected: GameType) => {
     setDifficulty(selected);
-    if (selected === 'speed') {
-      setSpeedScore(0);
-      setTimeLeft(60);
+    if (selected !== 'speed') {
+      generateQuestion();
     }
-    generateQuestion();
   };
 
   if (!difficulty) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>🎵 Ear Training</Text>
-        <Text style={styles.instruction}>Select Mode:</Text>
+        <Text style={styles.instruction}>Select Game Mode:</Text>
         <View style={styles.buttonContainer}><Button title="Easy" onPress={() => startGame('easy')} /></View>
         <View style={styles.buttonContainer}><Button title="Medium" onPress={() => startGame('medium')} /></View>
         <View style={styles.buttonContainer}><Button title="Hard" onPress={() => startGame('hard')} /></View>
@@ -179,8 +201,8 @@ export default function MainEarTraining() {
 
       {difficulty === 'speed' && (
         <>
-          <Text style={styles.stats}>⏱ Time Left: {timeLeft}s</Text>
-          <Text style={styles.stats}>⚡ Score: {speedScore}</Text>
+          <Text style={styles.instruction}>⚡ Speed Mode - Time Left: {timeLeft}s</Text>
+          <Text style={styles.stats}>✅ Score: {speedScore}</Text>
         </>
       )}
 
@@ -220,7 +242,11 @@ export default function MainEarTraining() {
       ))}
 
       <View style={styles.buttonContainer}>
-        <Button title="🔙 Back to Menu" onPress={() => setDifficulty(null)} />
+        <Button title="🔙 Back to Menu" onPress={() => {
+          if (timerRef.current) clearInterval(timerRef.current);
+          setIsSpeedModeRunning(false);
+          setDifficulty(null);
+        }} />
       </View>
     </ScrollView>
   );
