@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  Button,
-  StyleSheet,
-  Alert,
-  ScrollView,
-} from 'react-native';
+import { View, Text, Button, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -21,58 +14,58 @@ const NOTES = [
 ];
 
 export default function EarTraining() {
+  const [difficulty, setDifficulty] = useState<string | null>(null);
   const [currentNote, setCurrentNote] = useState<{ name: string; file: any } | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [demoSound, setDemoSound] = useState<Audio.Sound | null>(null);
   const [options, setOptions] = useState<string[]>([]);
-  const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [maxScore, setMaxScore] = useState(0);
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Easy');
-  const [gameStarted, setGameStarted] = useState(false);
+  const [score, setScore] = useState<number>(0);
+  const [streak, setStreak] = useState<number>(0);
+  const [maxScore, setMaxScore] = useState<number>(0);
 
   const HIGH_SCORE_KEY = 'EAR_TRAINING_HIGH_SCORE';
 
-  const getOptionCount = () => {
-    switch (difficulty) {
-      case 'Easy': return 2;
-      case 'Medium': return 4;
-      case 'Hard': return 6;
-      default: return 3;
+  useEffect(() => {
+    if (difficulty) {
+      generateQuestion();
+      loadHighScore();
     }
-  };
+
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
+  }, [difficulty]);
 
   const loadHighScore = async () => {
     const stored = await AsyncStorage.getItem(HIGH_SCORE_KEY);
-    if (stored !== null) setMaxScore(parseInt(stored));
+    if (stored) setMaxScore(parseInt(stored));
   };
 
-  const saveHighScore = async (newScore: number) => {
-    await AsyncStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+  const saveHighScore = async (score: number) => {
+    await AsyncStorage.setItem(HIGH_SCORE_KEY, score.toString());
   };
 
   const generateQuestion = async () => {
-    const count = getOptionCount();
+    if (sound) await sound.unloadAsync();
+
+    const numOptions = difficulty === 'Easy' ? 2 : difficulty === 'Medium' ? 3 : 4;
+
     const correct = NOTES[Math.floor(Math.random() * NOTES.length)];
 
     const shuffled = NOTES
       .filter((note) => note.name !== correct.name)
       .sort(() => 0.5 - Math.random())
-      .slice(0, count - 1);
+      .slice(0, numOptions - 1);
 
     const choices = [...shuffled.map((n) => n.name), correct.name].sort(() => 0.5 - Math.random());
 
     setCurrentNote(correct);
     setOptions(choices);
 
-    const { sound } = await Audio.Sound.createAsync(correct.file);
-    if (sound) {
-      if (demoSound) await demoSound.unloadAsync();
-      if (sound) await sound.unloadAsync();
-    }
-    setSound(sound);
-    await sound.playAsync();
-  };
+    const { sound: newSound } = await Audio.Sound.createAsync(correct.file);
+    setSound(newSound);
+    await newSound.playAsync();
+  }
+
 
   const handleAnswer = (answer: string) => {
     if (answer === currentNote?.name) {
@@ -86,59 +79,57 @@ export default function EarTraining() {
       }
       Alert.alert('Correct!', 'Well done!');
     } else {
+      setScore(0);
       setStreak(0);
       Alert.alert('Incorrect', `It was ${currentNote?.name}`);
     }
     generateQuestion();
   };
 
-  const handleStartGame = (selectedDifficulty: 'Easy' | 'Medium' | 'Hard') => {
-    setDifficulty(selectedDifficulty);
+  const handleBackToMenu = () => {
+    setDifficulty(null);
     setScore(0);
     setStreak(0);
-    setGameStarted(true);
-    generateQuestion();
-  };
-
-  const handleBackToMenu = () => {
-    setGameStarted(false);
+    setCurrentNote(null);
     setOptions([]);
-    if (sound) sound.unloadAsync();
   };
 
-  const playDemoNote = async (noteFile: any) => {
-    if (demoSound) await demoSound.unloadAsync();
-    const { sound } = await Audio.Sound.createAsync(noteFile);
-    setDemoSound(sound);
+  const playNote = async (file: any) => {
+    const { sound } = await Audio.Sound.createAsync(file);
     await sound.playAsync();
   };
 
-  useEffect(() => {
-    loadHighScore();
-    return () => {
-      if (sound) sound.unloadAsync();
-      if (demoSound) demoSound.unloadAsync();
-    };
-  }, []);
+  const repeatNote = async () => {
+    if (sound && currentNote) {
+      await sound.replayAsync();
+    } else {
+      Alert.alert('Note not available', 'Please wait for the next note to load.');
+    }
+  };
 
-  if (!gameStarted) {
+  if (!difficulty) {
     return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>🎼 Ear Training</Text>
-        <Text style={styles.instruction}>Select Difficulty to Start:</Text>
-        <View style={styles.buttonContainer}><Button title="Easy" onPress={() => handleStartGame('Easy')} /></View>
-        <View style={styles.buttonContainer}><Button title="Medium" onPress={() => handleStartGame('Medium')} /></View>
-        <View style={styles.buttonContainer}><Button title="Hard" onPress={() => handleStartGame('Hard')} /></View>
+      <View style={styles.container}>
+        <Text style={styles.title}>🎵 Choose Difficulty</Text>
+        <View style={styles.buttonContainer}>
+          <Button title="Easy (2 options)" onPress={() => setDifficulty('Easy')} />
+        </View>
+        <View style={styles.buttonContainer}>
+          <Button title="Medium (3 options)" onPress={() => setDifficulty('Medium')} />
+        </View>
+        <View style={styles.buttonContainer}>
+          <Button title="Hard (4 options)" onPress={() => setDifficulty('Hard')} />
+        </View>
 
-        <Text style={[styles.instruction, { marginTop: 30 }]}>🎧 Demo Notes:</Text>
-        {NOTES.map((note) => (
-          <View style={styles.buttonContainer} key={note.name}>
-            <Button title={`Play ${note.name}`} onPress={() => playDemoNote(note.file)} />
-          </View>
-        ))}
-
-        <Text style={styles.scoreText}>🏆 High Score: {maxScore}</Text>
-      </ScrollView>
+        <Text style={styles.demoTitle}>🎧 Demo Notes</Text>
+        <ScrollView style={{ maxHeight: 200 }}>
+          {NOTES.map((note) => (
+            <View key={note.name} style={styles.buttonContainer}>
+              <Button title={`Play ${note.name}`} onPress={() => playNote(note.file)} />
+            </View>
+          ))}
+        </ScrollView>
+      </View>
     );
   }
 
@@ -157,6 +148,10 @@ export default function EarTraining() {
         </View>
       ))}
 
+      <View style={styles.buttonContainer}>
+        <Button title="🔁 Repeat Note" onPress={repeatNote} />
+      </View>
+
       <View style={styles.backButton}>
         <Button title="⬅ Back to Menu" color="#888" onPress={handleBackToMenu} />
       </View>
@@ -166,7 +161,7 @@ export default function EarTraining() {
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
+    flex: 1,
     justifyContent: 'center',
     padding: 20,
     backgroundColor: '#fff',
@@ -180,7 +175,7 @@ const styles = StyleSheet.create({
   instruction: {
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
   },
   buttonContainer: {
     marginVertical: 8,
@@ -192,5 +187,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginVertical: 5,
+  },
+  demoTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 30,
+    marginBottom: 10,
+    textAlign: 'center',
   },
 });
