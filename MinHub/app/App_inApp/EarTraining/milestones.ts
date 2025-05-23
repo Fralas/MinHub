@@ -1,33 +1,22 @@
-export type Milestone = {
-  id: string;
-  title: string;
-  description: string;
-  condition: (score: number, streak: number) => boolean;
-};
-
-export const MILESTONES: Milestone[] = [
-  {
-    id: 'first-correct',
-    title: 'Getting Started',
-    description: 'Answer your first question correctly.',
-    condition: (score, streak) => score >= 1,
-  },
+export const MILESTONES = [
   {
     id: 'streak-5',
-    title: 'On a Roll',
-    description: 'Reach a 5-answer streak.',
-    condition: (score, streak) => streak >= 5,
+    title: '5 in a Row!',
+    description: 'You got a streak of 5 correct answers!',
   },
   {
     id: 'streak-10',
-    title: 'Unstoppable',
-    description: 'Reach a 10-answer streak.',
-    condition: (score, streak) => streak >= 10,
+    title: '10 in a Row!',
+    description: 'You got a streak of 10 correct answers!',
   },
   {
-    id: 'score-20',
-    title: 'Ears of Steel',
-    description: 'Reach a high score of 20.',
-    condition: (score, streak) => score >= 20,
+    id: 'score-50',
+    title: 'Scored 50!',
+    description: 'You reached a score of 50!',
+  },
+  {
+    id: 'score-100',
+    title: 'Perfect Ear!',
+    description: 'You reached a score of 100!',
   },
 ];
