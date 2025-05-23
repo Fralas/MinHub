@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -15,8 +16,6 @@ import {
 
 const { width: screenWidth } = Dimensions.get('window');
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
-const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
-
 
 interface UserProfile {
   age: string;
@@ -34,6 +33,7 @@ interface AppFeature {
   href: string;
   relevance?: number;
 }
+
 
 const allAppFeatures: AppFeature[] = [
   { id: 'todo', name: 'Todo List', href: '/App_inApp/ToDoList/toDoList' },
@@ -81,16 +81,6 @@ export default function HomeScreen() {
   const { userProfile, isLoadingProfile } = useUserProfile();
   const router = useRouter();
 
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem(USER_PROFILE_KEY);
-      await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
-      router.replace('/'); 
-    } catch (error) {
-      console.error("Error during logout:", error);
-    }
-  };
-
   const personalizedFeatures = useMemo(() => {
     if (!userProfile) {
       return allAppFeatures;
@@ -118,7 +108,7 @@ export default function HomeScreen() {
   if (isLoadingProfile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#641E7A" />
+        <ActivityIndicator size="large" color="#00796b" />
       </View>
     );
   }
@@ -126,13 +116,12 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.headerContainer}>
-        <View style={styles.titleContainer}>
-            <Text style={styles.title}>
-            {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
-            </Text>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+        <View style={styles.titleContainer} />
+        <Text style={styles.title}>
+        {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
+        </Text>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
+          <Ionicons name="settings-outline" size={24} color="#00796b" />
         </TouchableOpacity>
       </View>
 
@@ -159,7 +148,7 @@ const gapBetweenItems = 15;
 const itemWidth = (screenWidth - horizontalPaddingTotal - (gapBetweenItems * (numColumns - 1))) / numColumns;
 
 const styles = StyleSheet.create({
-  safeAreaContainer: { 
+  safeAreaContainer: {
     flex: 1,
     backgroundColor: '#f0f4f8',
   },
@@ -173,17 +162,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   titleContainer: {
-    flex: 1, 
-    alignItems: 'center', 
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-  logoutButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  logoutButtonText: {
-    color: '#641E7A', 
-    fontSize: 16,
-    fontWeight: '500',
+  settingsButton: {
+    padding: 5,
+    zIndex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -192,15 +178,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f4f8',
   },
   title: {
-    fontSize: 24, 
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
     textAlign: 'center',
   },
   suggestionText: {
     fontSize: 16,
-    color: '#641E7A',
-    marginBottom: 15, 
+    color: '#00796b',
+    marginBottom: 15,
     textAlign: 'center',
     paddingHorizontal: 20,
   },
