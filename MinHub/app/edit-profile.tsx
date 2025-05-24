@@ -1,16 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
     Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+    StyleSheet
 } from 'react-native';
 import { useTheme } from '../src/contexts/ThemeContext';
 
@@ -30,43 +23,45 @@ const ProfessionOptions = ["🧑‍🎓 Student", "🧑‍💼 Employed", "🚫 
 const HobbyOptions = ["🎨 Painting", "🎵 Music", "⚽ Sports", "📚 Reading", "🎮 Gaming", "🍳 Cooking"];
 
 
-  const handleSaveProfile = async () => {
-    const updatedProfile: UserProfileData = {
-      ...originalProfile,
-      accountName: accountName.trim(),
-      age: age.trim(),
-      email: email.trim(),
-      profession: profession,
-      hobbies: selectedHobbies,
+export default function EditProfileScreen() {
+  const { theme } = useTheme();
+  const router = useRouter();
+  const styles = createThemedStyles(theme);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [accountName, setAccountName] = useState('');
+  const [age, setAge] = useState('');
+  const [email, setEmail] = useState('');
+  const [profession, setProfession] = useState('');
+  const [selectedHobbies, setSelectedHobbies] = useState<string[]>([]);
+  
+  const [originalProfile, setOriginalProfile] = useState<Partial<UserProfileData>>({});
+
+
+  useEffect(() => {
+    const loadProfileData = async () => {
+      setIsLoading(true);
+      try {
+        const jsonData = await AsyncStorage.getItem(USER_PROFILE_KEY);
+        if (jsonData) {
+          const profile: UserProfileData = JSON.parse(jsonData);
+          setOriginalProfile(profile);
+          setAccountName(profile.accountName || '');
+          setAge(profile.age || '');
+          setEmail(profile.email || '');
+          setProfession(profile.profession || '');
+          setSelectedHobbies(profile.hobbies || []);
+        }
+      } catch (error) {
+        console.error("Failed to load profile data", error);
+        Alert.alert("Error", "Could not load profile data.");
+      } finally {
+        setIsLoading(false);
+      }
     };
+    loadProfileData();
+  }, []);
 
-      await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
-      Alert.alert("Profile Updated", "Your profile has been saved successfully.");
-  };
- 
-
-  return (
-    <View style={styles.container}>
-    <ScrollView contentContainerStyle={styles.scrollContentContainer}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Account Name</Text>
-          <TextInput
-            style={styles.input}
-            value={accountName}
-            onChangeText={setAccountName}
-            placeholder="Your account name"
-            placeholderTextColor={theme.subtleText}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
-          <Text style={styles.saveButtonText}>Save Changes</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    </ScrollView>
-    </View>
-  );
 }
 
 const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>

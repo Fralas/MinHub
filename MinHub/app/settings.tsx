@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../src/contexts/ThemeContext';
+import { requestPermissionsAsync, scheduleLocalNotification } from '../src/services/notificationManager';
 
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
@@ -10,6 +12,7 @@ const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, isDark, setTheme } = useTheme();
+  const styles = createThemedStyles(theme);
 
   const handleLogout = async () => {
     try {
@@ -21,53 +24,73 @@ export default function SettingsScreen() {
     }
   };
 
-  const toggleTheme = () => {
+  const onToggleThemeSwitch = () => {
     setTheme(isDark ? 'light' : 'dark');
   };
+  
+  const handleSendTestNotification = async () => {
+    const permissions = await Notifications.getPermissionsAsync();
+    let permissionsGranted = permissions.granted;
 
-  const styles = createThemedStyles(theme);
+    if (!permissionsGranted && !(permissions.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL || permissions.ios?.status === Notifications.IosAuthorizationStatus.AUTHORIZED)) {
+        permissionsGranted = await requestPermissionsAsync();
+        if(!permissionsGranted){
+            Alert.alert("Permissions Required", "Notification permissions are not granted. Please enable them in settings.");
+            return;
+        }
+    }
+    
+    scheduleLocalNotification(
+      "MinHub Test! 🚀",
+      "This notification should appear in 1 second.",
+      { customData: "test_from_settings_main" },
+      1
+    );
+    Alert.alert("Notification Scheduled", "Test notification has been scheduled. Check your device notifications.");
+  };
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <TouchableOpacity style={styles.row} onPress={() => { }}>
-            <Text style={styles.rowLabel}>Edit Profile</Text>
-            <Text style={styles.rowIcon}>›</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
-            <Text style={styles.rowLabel}>Notifications</Text>
-            <Text style={styles.rowIcon}>›</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView>
+            <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <TouchableOpacity style={styles.row} onPress={() => router.push('/edit-profile')}>
+                <Text style={styles.rowLabel}>Edit Profile</Text>
+                <Text style={styles.rowIcon}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
+                <Text style={styles.rowLabel}>Notifications</Text>
+                <Text style={styles.rowIcon}>›</Text>
+            </TouchableOpacity>
+            </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Dark Mode</Text>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#767577', true: theme.primary }}
-              thumbColor={isDark ? '#f4f3f4' : '#f4f3f4'}
-            />
-          </View>
-        </View>
+            <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Appearance</Text>
+            <View style={styles.row}>
+                <Text style={styles.rowLabel}>Dark Mode</Text>
+                <Switch
+                value={isDark}
+                onValueChange={onToggleThemeSwitch}
+                trackColor={{ false: '#767577', true: theme.primary }}
+                thumbColor={isDark ? theme.primary : '#f4f3f4'}
+                />
+            </View>
+            </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Testing</Text>
-          <TouchableOpacity style={styles.row} onPress={() => {
-          }}>
-            <Text style={styles.rowLabel}>Send Test Notification Now</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Testing</Text>
+            <TouchableOpacity style={styles.row} onPress={handleSendTestNotification}>
+                <Text style={styles.rowLabel}>Send Test Notification Now</Text>
+            </TouchableOpacity>
+            </View>
 
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.section}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+            </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
