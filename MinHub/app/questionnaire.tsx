@@ -2,14 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  Image,
+
+
+
+
+
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
@@ -18,12 +24,12 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const ProfessionOptions = ["🧑‍🎓 Student", "🧑‍💼 Employed", "🚫 Neither", "🤔 Other"];
 const HobbyOptions = [
-  { label: "🎨 Painting", emoji: "🎨" },
-  { label: "🎵 Music", emoji: "🎵" },
-  { label: "⚽ Sports", emoji: "⚽" },
-  { label: "📚 Reading", emoji: "📚" },
-  { label: "🎮 Gaming", emoji: "🎮" },
-  { label: "🍳 Cooking", emoji: "🍳" },
+  { label: "🎨 Painting" },
+  { label: "🎵 Music" },
+  { label: "⚽ Sports" },
+  { label: "📚 Reading" },
+  { label: "🎮 Gaming" },
+  { label: "🍳 Cooking" },
 ];
 const ReasonOptions = ["🧘‍♀️ Reduce stress", "🤔 Manage overthinking", "💪 Increase productivity", "🙂 General well-being", "🌱 Improve habits"];
 
@@ -40,12 +46,12 @@ export default function QuestionnaireScreen() {
   const [reasonForUse, setReasonForUse] = useState('');
 
   const questionnairePages = [
-    { id: '1', title: '🎂 Your Age?', emoji: '🎂', value: age, setter: setAge, keyboard: 'numeric', placeholder: 'E.g., 25', color: '#FFDAB9' },
-    { id: '2', title: '👤 Account Name', emoji: '👤', value: accountName, setter: setAccountName, placeholder: 'How should we call you?', color: '#E6E6FA' },
-    { id: '3', title: '🧑‍💼 Profession', emoji: '🧑‍💼', options: ProfessionOptions, value: profession, setter: setProfession, color: '#ADD8E6' },
-    { id: '4', title: '📧 Your Email', emoji: '📧', value: email, setter: setEmail, keyboard: 'email-address', placeholder: 'your@email.com', color: '#FFFACD' },
-    { id: '5', title: '🎨 Favorite Hobbies', emoji: '🎨', options: HobbyOptions.map(h => h.label), value: selectedHobbies, setter: setSelectedHobbies, multiSelect: true, color: '#90EE90' },
-    { id: '6', title: '🎯 Main Reason for Use', emoji: '🎯', options: ReasonOptions, value: reasonForUse, setter: setReasonForUse, color: '#FFB6C1' },
+    { id: '1', title: '🎂 Your Age?', image: require('../assets/images/questionIMG/1.png'), value: age, setter: setAge, keyboard: 'numeric', placeholder: 'E.g., 25', color: '#FFDAB9' },
+    { id: '2', title: '👤 Account Name', image: require('../assets/images/questionIMG/2.png'), value: accountName, setter: setAccountName, placeholder: 'How should we call you?', color: '#E6E6FA' },
+    { id: '3', title: '🧑‍💼 Profession', image: require('../assets/images/questionIMG/3.png'), options: ProfessionOptions, value: profession, setter: setProfession, color: '#ADD8E6' },
+    { id: '4', title: '📧 Your Email', image: require('../assets/images/questionIMG/4.png'), value: email, setter: setEmail, keyboard: 'email-address', placeholder: 'your@email.com', color: '#FFFACD' },
+    { id: '5', title: '🎨 Favorite Hobbies', image: require('../assets/images/questionIMG/5.png'), options: HobbyOptions.map(h => h.label), value: selectedHobbies, setter: setSelectedHobbies, multiSelect: true, color: '#90EE90' },
+    { id: '6', title: '🎯 Main Reason for Use', image: require('../assets/images/questionIMG/6.png'), options: ReasonOptions, value: reasonForUse, setter: setReasonForUse, color: '#FFB6C1' },
   ];
 
   const handleCompleteQuestionnaire = async () => {
@@ -89,7 +95,7 @@ export default function QuestionnaireScreen() {
 
   const renderQuestionPage = (pageData: any) => (
     <View key={pageData.id} style={[styles.pageContainer, { width: screenWidth, backgroundColor: pageData.color || '#F5F5F5' }]}>
-      <Text style={styles.pageEmoji}>{pageData.emoji}</Text>
+      <Image source={pageData.image} style={styles.pageImage} resizeMode="contain" />
       <Text style={styles.pageTitle}>{pageData.title}</Text>
       {pageData.options ? (
         <View style={styles.optionsContainer}>
@@ -174,7 +180,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  pageEmoji: { fontSize: 60, marginBottom: 20 },
+  pageImage: {
+    width: screenWidth * 0.7, 
+    height: screenWidth * 0.7,
+    marginBottom: 20,
+  },
   pageTitle: { fontSize: 24, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 30 },
   input: {
     width: '80%',
@@ -204,7 +214,7 @@ const styles = StyleSheet.create({
   },
   optionSelected: {
     backgroundColor: '#641E7A',
-    borderColor: '#004d40',
+    borderColor: '#4A0D5C',
   },
   optionText: {
     fontSize: 16,

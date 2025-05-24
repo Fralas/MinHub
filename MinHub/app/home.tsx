@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Link, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -60,20 +60,34 @@ function useUserProfile() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
-  useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        const profileDataString = await AsyncStorage.getItem(USER_PROFILE_KEY);
-        if (profileDataString) {
-          setUserProfile(JSON.parse(profileDataString));
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const loadUserProfile = async () => {
+        setIsLoadingProfile(true);
+        try {
+          const profileDataString = await AsyncStorage.getItem(USER_PROFILE_KEY);
+          if (isActive && profileDataString) {
+            setUserProfile(JSON.parse(profileDataString));
+          } else if (isActive) {
+            setUserProfile(null);
+          }
+        } catch (error) {
+          if (isActive) setUserProfile(null);
+          console.error('Failed to load user profile data on focus:', error);
+        } finally {
+          if (isActive) setIsLoadingProfile(false);
         }
-      } catch (error) {
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    };
-    loadUserProfile();
-  }, []);
+      };
+
+      loadUserProfile();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
   return { userProfile, isLoadingProfile };
 }
 
@@ -81,7 +95,6 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const { userProfile, isLoadingProfile } = useUserProfile();
   const router = useRouter();
-
   const personalizedFeatures = useMemo(() => {
     if (!userProfile) {
       return allAppFeatures;
@@ -119,12 +132,12 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.headerContainer}>
-        <View style={styles.titleContainer} />
+        <View style={styles.titlePlaceholder} />
         <Text style={styles.title}>
-        {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
+          {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
         </Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
-          <Ionicons name="settings-outline" size={24} color={theme.primary} />
+           <Ionicons name="settings-outline" size={26} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -147,9 +160,9 @@ export default function HomeScreen() {
 
 const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark: boolean) => {
   const numColumns = 2;
-  const horizontalPaddingTotal = 20;
+  const horizontalPaddingTotalForIconContainer = 20; 
   const gapBetweenItems = 15;
-  const itemWidth = (screenWidth - horizontalPaddingTotal - (gapBetweenItems * (numColumns - 1))) / numColumns;
+  const itemWidth = (screenWidth - horizontalPaddingTotalForIconContainer - (gapBetweenItems * (numColumns - 1))) / numColumns;
 
   return StyleSheet.create({
     safeAreaContainer: {
@@ -160,20 +173,16 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark:
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: horizontalPaddingTotal / 2,
-      paddingTop: Platform.OS === 'android' ? 25 : 15,
-      paddingBottom: 10,
+      paddingHorizontal: 15, 
+      paddingTop: Platform.OS === 'android' ? 35 : 25,
+      paddingBottom: 15,
       width: '100%',
     },
-    titleContainer: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      alignItems: 'center',
+    titlePlaceholder: { 
+      width: 26 + 15, 
     },
     settingsButton: {
-      padding: 5,
-      zIndex: 1,
+      padding: 8,
     },
     loadingContainer: {
       flex: 1,
@@ -182,15 +191,18 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark:
       backgroundColor: theme.background,
     },
     title: {
-      fontSize: 24,
+      flex: 1, 
+      fontSize: 22, 
       fontWeight: 'bold',
       color: theme.text,
       textAlign: 'center',
+      marginHorizontal: 5, 
     },
     suggestionText: {
       fontSize: 16,
       color: theme.primary,
-      marginBottom: 15,
+      marginTop: 10,
+      marginBottom: 20,
       textAlign: 'center',
       paddingHorizontal: 20,
     },
@@ -198,7 +210,7 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark:
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
-      paddingHorizontal: horizontalPaddingTotal / 2,
+      paddingHorizontal: horizontalPaddingTotalForIconContainer / 2,
       paddingBottom: 30,
       width: '100%',
     },
@@ -215,8 +227,8 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark:
       elevation: 2,
       shadowColor: '#000000',
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: isDark ? 0.2 : 0.08,
-      shadowRadius: 2.5,
+      shadowOpacity: isDark ? 0.25 : 0.1,
+      shadowRadius: 3,
       padding: 8,
     },
     iconText: {

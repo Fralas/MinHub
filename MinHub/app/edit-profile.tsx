@@ -1,9 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useNavigation, useRouter } from 'expo-router';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
-    StyleSheet
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useTheme } from '../src/contexts/ThemeContext';
 
@@ -26,6 +33,7 @@ const HobbyOptions = ["🎨 Painting", "🎵 Music", "⚽ Sports", "📚 Reading
 export default function EditProfileScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const styles = createThemedStyles(theme);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +70,127 @@ export default function EditProfileScreen() {
     loadProfileData();
   }, []);
 
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    const updatedProfile: UserProfileData = {
+      ...(originalProfile as UserProfileData),
+      accountName: accountName.trim(),
+      age: age.trim(),
+      email: email.trim(),
+      profession: profession,
+      hobbies: selectedHobbies,
+    };
+
+    try {
+      await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
+      Alert.alert("Profile Updated", "Your profile has been saved successfully.");
+      setOriginalProfile(updatedProfile);
+    } catch (error) {
+      console.error("Failed to save profile data", error);
+      Alert.alert("Error", "Could not save profile data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const toggleHobby = (hobby: string) => {
+    setSelectedHobbies(prev =>
+      prev.includes(hobby) ? prev.filter(h => h !== hobby) : [...prev, hobby]
+    );
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+        headerRight: () => (
+            <TouchableOpacity onPress={handleSaveProfile} style={{ marginRight: 15 }}>
+                <Text style={{ color: theme.primary, fontSize: 17, fontWeight: '600' }}>Save</Text>
+            </TouchableOpacity>
+        ),
+    });
+  }, [navigation, handleSaveProfile, theme.primary]);
+
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled">
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Account Name</Text>
+          <TextInput
+            style={styles.input}
+            value={accountName}
+            onChangeText={setAccountName}
+            placeholder="Your account name"
+            placeholderTextColor={theme.subtleText}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Age</Text>
+          <TextInput
+            style={styles.input}
+            value={age}
+            onChangeText={setAge}
+            placeholder="Your age"
+            keyboardType="numeric"
+            placeholderTextColor={theme.subtleText}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="your@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            placeholderTextColor={theme.subtleText}
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Profession</Text>
+          <View style={styles.optionsRowContainer}>
+            {ProfessionOptions.map(option => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.optionChip, profession === option && styles.optionChipSelected]}
+                onPress={() => setProfession(option)}
+              >
+                <Text style={[styles.optionChipText, profession === option && styles.optionChipTextSelected]}>{option}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Hobbies</Text>
+          <View style={styles.optionsRowContainer}>
+            {HobbyOptions.map(hobby => (
+              <TouchableOpacity
+                key={hobby}
+                style={[styles.optionChip, selectedHobbies.includes(hobby) && styles.optionChipSelected]}
+                onPress={() => toggleHobby(hobby)}
+              >
+                <Text style={[styles.optionChipText, selectedHobbies.includes(hobby) && styles.optionChipTextSelected]}>{hobby}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </SafeAreaView>
+    </ScrollView>
+    </View>
+  );
 }
 
 const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
@@ -83,35 +212,35 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       paddingTop: 20,
     },
     formGroup: {
-      marginBottom: 20,
+      marginBottom: 25,
     },
     label: {
       fontSize: 16,
       color: theme.text,
-      marginBottom: 8,
-      fontWeight: '500',
+      marginBottom: 10,
+      fontWeight: '600',
     },
     input: {
       backgroundColor: theme.card,
       color: theme.text,
       borderWidth: 1,
       borderColor: theme.border,
-      borderRadius: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 15,
-      fontSize: 16,
+      borderRadius: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      fontSize: 17,
     },
     optionsRowContainer: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 10,
+      gap: 12,
     },
     optionChip: {
       backgroundColor: theme.card,
-      paddingVertical: 8,
-      paddingHorizontal: 15,
+      paddingVertical: 10,
+      paddingHorizontal: 18,
       borderRadius: 20,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: theme.primary,
     },
     optionChipSelected: {
@@ -120,21 +249,10 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
     },
     optionChipText: {
       color: theme.primary,
-      fontSize: 14,
+      fontSize: 15,
+      fontWeight: '500',
     },
     optionChipTextSelected: {
-      color: theme.card, 
-    },
-    saveButton: {
-      backgroundColor: theme.primary,
-      paddingVertical: 15,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 20,
-    },
-    saveButtonText: {
-      color: theme.card, 
-      fontSize: 18,
-      fontWeight: 'bold',
+      color: theme.card,
     },
   });
