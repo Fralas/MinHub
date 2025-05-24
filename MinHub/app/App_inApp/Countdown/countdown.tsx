@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Alert,
+  FlatList,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  Alert,
+  View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
 
 type Preset = {

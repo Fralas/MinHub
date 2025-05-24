@@ -49,9 +49,19 @@ function ThemedStack() {
         }}
       />
       <Stack.Screen
-        name="notification-settings" 
+        name="notification-settings"
         options={{
           title: 'Notification Settings',
+          headerShown: true,
+          headerStyle: { backgroundColor: theme.card },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
+        }}
+      />
+      <Stack.Screen
+        name="edit-profile" 
+        options={{
+          title: 'Edit Profile',
           headerShown: true,
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
