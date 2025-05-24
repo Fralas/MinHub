@@ -2,10 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
+import { I18nProvider, useI18n } from '../src/contexts/I18nContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 
 function ThemedStack() {
   const { theme, isDark } = useTheme();
+  const { t } = useI18n();
+
+  const headerTintColor = isDark ? '#FFFFFF' : '#FFFFFF'; // Assuming white text on primary color
 
   return (
     <Stack>
@@ -16,12 +20,12 @@ function ThemedStack() {
         name="home"
         options={({ navigation }) => ({
           headerShown: true,
-          title: 'MinHub Home',
+          title: t('home.defaultTitle'),
           headerStyle: { backgroundColor: theme.primary },
-          headerTintColor: isDark ? darkThemeForLayout.card : lightThemeForLayout.card,
+          headerTintColor: headerTintColor,
           headerTitleStyle: {
             fontWeight: 'bold',
-            color: isDark ? darkThemeForLayout.card : lightThemeForLayout.card,
+            color: headerTintColor,
           },
           headerRight: () => (
             <TouchableOpacity
@@ -31,7 +35,7 @@ function ThemedStack() {
               <Ionicons
                 name="settings-outline"
                 size={26}
-                color={isDark ? darkThemeForLayout.card : lightThemeForLayout.card}
+                color={headerTintColor}
               />
             </TouchableOpacity>
           ),
@@ -41,7 +45,7 @@ function ThemedStack() {
         name="settings"
         options={{
           headerShown: true,
-          title: 'Settings',
+          title: t('settings.title'),
           presentation: 'modal',
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
@@ -51,7 +55,7 @@ function ThemedStack() {
       <Stack.Screen
         name="notification-settings"
         options={{
-          title: 'Notification Settings',
+          title: t('notificationSettings.title'),
           headerShown: true,
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
@@ -59,9 +63,19 @@ function ThemedStack() {
         }}
       />
       <Stack.Screen
-        name="edit-profile" 
+        name="edit-profile"
         options={{
-          title: 'Edit Profile',
+          title: t('editProfile.title'),
+          headerShown: true,
+          headerStyle: { backgroundColor: theme.card },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
+        }}
+      />
+       <Stack.Screen
+        name="language-settings"
+        options={{
+          title: t('languages.select'),
           headerShown: true,
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
@@ -75,11 +89,10 @@ function ThemedStack() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <ThemedStack />
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeProvider>
+        <ThemedStack />
+      </ThemeProvider>
+    </I18nProvider>
   );
 }
-
-const lightThemeForLayout = { card: '#ffffff' };
-const darkThemeForLayout = { card: '#1c1c1e' };

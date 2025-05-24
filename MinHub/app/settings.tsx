@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useI18n } from '../src/contexts/I18nContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { requestPermissionsAsync, scheduleLocalNotification } from '../src/services/notificationManager';
 
@@ -12,6 +13,7 @@ const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, isDark, setTheme } = useTheme();
+  const { t } = useI18n();
   const styles = createThemedStyles(theme);
 
   const handleLogout = async () => {
@@ -54,21 +56,21 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView>
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
+            <Text style={styles.sectionTitle}>{t('settings.account')}</Text>
             <TouchableOpacity style={styles.row} onPress={() => router.push('/edit-profile')}>
-                <Text style={styles.rowLabel}>Edit Profile</Text>
+                <Text style={styles.rowLabel}>{t('settings.editProfile')}</Text>
                 <Text style={styles.rowIcon}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
-                <Text style={styles.rowLabel}>Notifications</Text>
+                <Text style={styles.rowLabel}>{t('settings.notifications')}</Text>
                 <Text style={styles.rowIcon}>›</Text>
             </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Appearance</Text>
+            <Text style={styles.sectionTitle}>{t('settings.appearance')}</Text>
             <View style={styles.row}>
-                <Text style={styles.rowLabel}>Dark Mode</Text>
+                <Text style={styles.rowLabel}>{t('settings.darkMode')}</Text>
                 <Switch
                 value={isDark}
                 onValueChange={onToggleThemeSwitch}
@@ -76,18 +78,22 @@ export default function SettingsScreen() {
                 thumbColor={isDark ? theme.primary : '#f4f3f4'}
                 />
             </View>
+            <TouchableOpacity style={styles.row} onPress={() => router.push('/language-settings')}>
+                <Text style={styles.rowLabel}>{t('settings.language')}</Text>
+                <Text style={styles.rowIcon}>›</Text>
+            </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Testing</Text>
+            <Text style={styles.sectionTitle}>{t('settings.testing')}</Text>
             <TouchableOpacity style={styles.row} onPress={handleSendTestNotification}>
-                <Text style={styles.rowLabel}>Send Test Notification Now</Text>
+                <Text style={styles.rowLabel}>{t('settings.sendTestNotification')}</Text>
             </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
+                <Text style={styles.logoutButtonText}>{t('settings.logout')}</Text>
             </TouchableOpacity>
             </View>
         </ScrollView>
