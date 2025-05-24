@@ -47,6 +47,7 @@ const allAppFeatures: AppFeature[] = [
   { id: 'shoppingList', name: 'Shopping Lists', href: '/App_inApp/ShoppingList/shoppinglist' },
   { id: 'reminders', name: 'Reminders', href: '/App_inApp/Reminders/reminders' },
   { id: 'foodScheduler', name: 'Food', href: '/App_inApp/Food/foodScheduler' },
+  { id: 'drink', name: 'ReDrink', href: '/App_inApp/DrinkReminder/DrinkReminder' },
   { id: 'calendar', name: 'Calendar', href: '/App_inApp/Calendar/calendar' },
   { id: 'clock', name: 'Clock', href: '/App_inApp/Clock/clock' },
   { id: 'workout', name: 'Workout', href: '/App_inApp/Workout/workout' },
@@ -54,6 +55,7 @@ const allAppFeatures: AppFeature[] = [
   { id: 'sleepHelper', name: 'Sleep Helper', href: '/App_inApp/SleepHelper/sleep-helper' },
   { id: 'earTraining', name: 'EarTraining', href: '/App_inApp/EarTraining/earTraining' },
   { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro' },
+  
 ];
 
 function useUserProfile() {
@@ -105,7 +107,7 @@ export default function HomeScreen() {
         if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
           relevance = 10;
         }
-        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper')) {
+        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink')) {
           relevance = 10;
         }
         if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {

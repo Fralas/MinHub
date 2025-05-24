@@ -10,21 +10,19 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
-import { EarTrainingStackParamList } from './earTraining';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MILESTONES } from './milestones';
+import { NOTES } from './notes';
 
-const NOTES = [
-  { name: 'C', file: require('./notes/c6.mp3') },
-  { name: 'D', file: require('./notes/d6.mp3') },
-  { name: 'E', file: require('./notes/e6.mp3') },
-  { name: 'F', file: require('./notes/f6.mp3') },
-  { name: 'G', file: require('./notes/g6.mp3') },
-  { name: 'A', file: require('./notes/a6.mp3') },
-  { name: 'B', file: require('./notes/b6.mp3') },
-];
+type EarTrainingStackParamList = {
+  index: undefined;
+  mainEarTraining: undefined;
+  speedMode: undefined;
+  demoNotes: undefined;
+  milestones: { unlockedMilestones: string[] };
+};
 
-type NavigationProp = NativeStackNavigationProp<EarTrainingStackParamList, 'Main'>;
+type NavigationProp = NativeStackNavigationProp<EarTrainingStackParamList, 'mainEarTraining'>;
 
 export default function MainEarTraining() {
   const navigation = useNavigation<NavigationProp>();
@@ -64,6 +62,12 @@ export default function MainEarTraining() {
     }
   }, [timeLeft, difficulty]);
 
+  useEffect(() => {
+    if (difficulty) {
+      generateQuestion();
+    }
+  }, [difficulty]);
+
   const loadHighScore = async () => {
     const stored = await AsyncStorage.getItem('highScore');
     if (stored) setHighScore(parseInt(stored));
@@ -95,9 +99,9 @@ export default function MainEarTraining() {
     const correct = NOTES[Math.floor(Math.random() * NOTES.length)];
     const wrongAnswers = NOTES.filter(n => n.name !== correct.name).sort(() => 0.5 - Math.random());
 
-    let numChoices = 4;
+    let numChoices = 7; // Default for 'hard'
     if (difficulty === 'easy') numChoices = 2;
-    else if (difficulty === 'medium') numChoices = 3;
+    else if (difficulty === 'medium') numChoices = 4;
 
     const choices = [
       ...wrongAnswers.slice(0, numChoices - 1).map(n => n.name),
@@ -144,20 +148,12 @@ export default function MainEarTraining() {
     }
   };
 
-  const handlePlayDemo = async (note: typeof NOTES[0]) => {
-    if (soundRef.current) await soundRef.current.unloadAsync();
-    const { sound } = await Audio.Sound.createAsync(note.file);
-    soundRef.current = sound;
-    await sound.playAsync();
-  };
-
   const startGame = (selected: 'easy' | 'medium' | 'hard' | 'speed') => {
     setDifficulty(selected);
     if (selected === 'speed') {
       setSpeedScore(0);
       setTimeLeft(60);
     }
-    generateQuestion();
   };
 
   if (!difficulty) {
@@ -169,6 +165,9 @@ export default function MainEarTraining() {
         <View style={styles.buttonContainer}><Button title="Medium" onPress={() => startGame('medium')} /></View>
         <View style={styles.buttonContainer}><Button title="Hard" onPress={() => startGame('hard')} /></View>
         <View style={styles.buttonContainer}><Button title="⚡ Speed Mode" onPress={() => startGame('speed')} /></View>
+        <View style={styles.buttonContainer}>
+          <Button title="🎧 Demo Notes" onPress={() => navigation.navigate('demoNotes')} />
+        </View>
       </View>
     );
   }
@@ -207,17 +206,10 @@ export default function MainEarTraining() {
         <View style={styles.buttonContainer}>
           <Button
             title="🏅 View Milestones"
-            onPress={() => navigation.navigate('Milestones', { unlockedMilestones })}
+            onPress={() => navigation.navigate('milestones', { unlockedMilestones })}
           />
         </View>
       )}
-
-      <Text style={styles.demoTitle}>🎧 Demo Notes:</Text>
-      {NOTES.map(note => (
-        <View style={styles.buttonContainer} key={note.name}>
-          <Button title={`Play ${note.name}`} onPress={() => handlePlayDemo(note)} />
-        </View>
-      ))}
 
       <View style={styles.buttonContainer}>
         <Button title="🔙 Back to Menu" onPress={() => setDifficulty(null)} />
@@ -251,11 +243,5 @@ const styles = StyleSheet.create({
   stats: {
     fontSize: 16,
     marginTop: 10,
-  },
-  demoTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 30,
-    marginBottom: 10,
   },
 });

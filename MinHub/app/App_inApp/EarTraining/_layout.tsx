@@ -1,31 +1,17 @@
-import { Stack } from "expo-router";
-import React from "react";
+import { Stack } from 'expo-router';
 
 export default function EarTrainingLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#641E7A',
-        },
-        headerTintColor: '#FFFFFF',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: true,
       }}
     >
-      <Stack.Screen
-        name="main"
-        options={{ title: 'Ear Training' }}
-      />
-      <Stack.Screen
-        name="milestones"
-        options={{ title: 'Milestones' }}
-      />
-      <Stack.Screen
-        name="speedmode"
-        options={{ title: 'Speed Mode' }}
-      />
+      <Stack.Screen name="index" options={{ title: 'Ear Training Home' }} />
+      <Stack.Screen name="mainEarTraining" options={{ title: 'Game Mode' }} />
+      <Stack.Screen name="speedMode" options={{ title: 'Speed Mode' }} />
+      <Stack.Screen name="demoNotes" options={{ title: 'Demo Notes' }} />
+      <Stack.Screen name="milestones" options={{ title: 'Milestones' }} />
     </Stack>
   );
 }
