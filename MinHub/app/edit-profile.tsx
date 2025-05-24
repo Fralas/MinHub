@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useRouter } from 'expo-router';
+import { useNavigation } from 'expo-router'; // useRouter non era usato, useNavigation sì
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -29,10 +29,14 @@ interface UserProfileData {
 const ProfessionOptions = ["🧑‍🎓 Student", "🧑‍💼 Employed", "🚫 Neither", "🤔 Other"];
 const HobbyOptions = ["🎨 Painting", "🎵 Music", "⚽ Sports", "📚 Reading", "🎮 Gaming", "🍳 Cooking"];
 
+const validateEmailFormat = (emailToValidate: string): boolean => {
+  if (!emailToValidate) return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(emailToValidate);
+};
 
 export default function EditProfileScreen() {
   const { theme } = useTheme();
-  const router = useRouter();
   const navigation = useNavigation();
   const styles = createThemedStyles(theme);
 
@@ -40,11 +44,10 @@ export default function EditProfileScreen() {
   const [accountName, setAccountName] = useState('');
   const [age, setAge] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [profession, setProfession] = useState('');
   const [selectedHobbies, setSelectedHobbies] = useState<string[]>([]);
-  
   const [originalProfile, setOriginalProfile] = useState<Partial<UserProfileData>>({});
-
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -70,8 +73,22 @@ export default function EditProfileScreen() {
     loadProfileData();
   }, []);
 
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (emailError && validateEmailFormat(text)) {
+        setEmailError('');
+    }
+  };
+
   const handleSaveProfile = async () => {
+    if (!validateEmailFormat(email)) {
+      setEmailError('Please enter a valid email address.');
+      Alert.alert("Invalid Email", "Please check your email address.");
+      return;
+    }
+    setEmailError('');
     setIsLoading(true);
+
     const updatedProfile: UserProfileData = {
       ...(originalProfile as UserProfileData),
       accountName: accountName.trim(),
@@ -84,7 +101,7 @@ export default function EditProfileScreen() {
     try {
       await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
       Alert.alert("Profile Updated", "Your profile has been saved successfully.");
-      setOriginalProfile(updatedProfile);
+      setOriginalProfile(updatedProfile); // Aggiorna lo stato originale con i dati salvati
     } catch (error) {
       console.error("Failed to save profile data", error);
       Alert.alert("Error", "Could not save profile data.");
@@ -107,7 +124,7 @@ export default function EditProfileScreen() {
             </TouchableOpacity>
         ),
     });
-  }, [navigation, handleSaveProfile, theme.primary]);
+  }, [navigation, accountName, age, email, profession, selectedHobbies, theme.primary]);
 
 
   if (isLoading) {
@@ -148,14 +165,16 @@ export default function EditProfileScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, emailError ? styles.inputError : {}]}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={handleEmailChange}
             placeholder="your@email.com"
             keyboardType="email-address"
             autoCapitalize="none"
             placeholderTextColor={theme.subtleText}
+            onBlur={() => validateEmailFormat(email) ? setEmailError('') : setEmailError('Invalid email format.')}
           />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
         </View>
 
         <View style={styles.formGroup}>
@@ -200,11 +219,11 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       backgroundColor: theme.background,
     },
     loadingContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     scrollContentContainer: {
-        paddingBottom: 30,
+      paddingBottom: 30,
     },
     safeArea: {
       flex: 1,
@@ -229,6 +248,14 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       paddingVertical: 14,
       paddingHorizontal: 16,
       fontSize: 17,
+    },
+    inputError: {
+      borderColor: theme.danger,
+    },
+    errorText: {
+      color: theme.danger,
+      fontSize: 13,
+      marginTop: 5,
     },
     optionsRowContainer: {
       flexDirection: 'row',
