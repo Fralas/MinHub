@@ -1,36 +1,66 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Button, StyleSheet, Alert, AppState } from 'react-native';
+import {
+  View,
+  Text,
+  Button,
+  StyleSheet,
+  Alert,
+  AppState,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
 
 export default function WaterReminder() {
   const [isActive, setIsActive] = useState(false);
-  const [intervalHours, setIntervalHours] = useState(2);
   const [nextReminder, setNextReminder] = useState<Date | null>(null);
+  const [drinkProgress, setDrinkProgress] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const navigation = useNavigation();
 
-  const intervalKey = 'reminderInterval';
-  const activeKey = 'reminderIsActive';
-  const nextKey = 'nextReminder';
+  const DRINK_PROGRESS_KEY = 'drinkProgress';
+  const LAST_DRINK_DATE_KEY = 'lastDrinkDate';
+
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
-    const loadSettings = async () => {
-      const storedInterval = await AsyncStorage.getItem(intervalKey);
-      const storedActive = await AsyncStorage.getItem(activeKey);
-      const storedNext = await AsyncStorage.getItem(nextKey);
+    const loadProgress = async () => {
+      try {
+        const savedProgress = await AsyncStorage.getItem(DRINK_PROGRESS_KEY);
+        const savedDate = await AsyncStorage.getItem(LAST_DRINK_DATE_KEY);
+        const today = getTodayDateString();
 
-      if (storedInterval) setIntervalHours(Number(storedInterval));
-      if (storedActive === 'true') setIsActive(true);
-      if (storedNext) setNextReminder(new Date(storedNext));
+        if (savedDate !== today) {
+          setDrinkProgress(0);
+          await AsyncStorage.setItem(LAST_DRINK_DATE_KEY, today);
+        } else if (savedProgress !== null) {
+          setDrinkProgress(Number(savedProgress));
+        }
+      } catch (e) {
+        console.error('Failed to load drink progress:', e);
+      }
     };
-
-    loadSettings();
+    loadProgress();
   }, []);
 
   useEffect(() => {
+    const saveProgress = async () => {
+      try {
+        await AsyncStorage.setItem(DRINK_PROGRESS_KEY, drinkProgress.toString());
+        await AsyncStorage.setItem(LAST_DRINK_DATE_KEY, getTodayDateString());
+      } catch (e) {
+        console.error('Failed to save drink progress:', e);
+      }
+    };
+    saveProgress();
+  }, [drinkProgress]);
+
+  useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === 'active' && isActive && nextReminder) {
-        if (new Date() >= nextReminder) {
+      if (nextAppState === 'active' && isActive) {
+        if (nextReminder && new Date() >= nextReminder) {
           showReminder();
           scheduleNextReminder();
         }
@@ -38,7 +68,13 @@ export default function WaterReminder() {
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
+
+    return () => {
+      subscription.remove();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, [isActive, nextReminder]);
 
   useEffect(() => {
@@ -46,20 +82,15 @@ export default function WaterReminder() {
       showReminder();
       scheduleNextReminder();
 
-      const intervalMs = intervalHours * 60 * 60 * 1000;
       intervalRef.current = setInterval(() => {
         showReminder();
         scheduleNextReminder();
-      }, intervalMs) as unknown as NodeJS.Timeout;
-
-      AsyncStorage.setItem(activeKey, 'true');
+      }, 2 * 60 * 60 * 1000) as unknown as NodeJS.Timeout;
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      AsyncStorage.setItem(activeKey, 'false');
-      AsyncStorage.removeItem(nextKey);
     }
 
     return () => {
@@ -67,21 +98,23 @@ export default function WaterReminder() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isActive, intervalHours]);
+  }, [isActive]);
 
   const showReminder = () => {
-    Alert.alert('💧 Time to drink water!', 'Stay hydrated. Drink a glass of water now!');
+    Alert.alert(
+      '💧 Time to drink water!',
+      'Stay hydrated. Drink a glass of water now!',
+      [{ text: 'OK', onPress: () => console.log('Reminder acknowledged') }]
+    );
   };
 
   const scheduleNextReminder = () => {
     const now = new Date();
-    const next = new Date(now.getTime() + intervalHours * 60 * 60 * 1000);
-    setNextReminder(next);
-    AsyncStorage.setItem(nextKey, next.toISOString());
+    const nextTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    setNextReminder(nextTime);
   };
 
-  const startReminders = async () => {
-    await AsyncStorage.setItem(intervalKey, intervalHours.toString());
+  const startReminders = () => {
     setIsActive(true);
   };
 
@@ -90,42 +123,51 @@ export default function WaterReminder() {
     setNextReminder(null);
   };
 
+  const handleDrink = () => {
+    setDrinkProgress((prev) => Math.min(prev + 20, 100));
+  };
+
+  const goToHistory = () => {
+    navigation.navigate('WaterIntakeHistory' as never);
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>💧 Water Reminder</Text>
-
       <Text style={styles.description}>
         {isActive
-          ? `Next reminder at: ${nextReminder?.toLocaleTimeString() || 'calculating...'}`
-          : 'Press start to get reminders'}
+          ? `Next reminder at: ${
+              nextReminder?.toLocaleTimeString() || 'calculating...'
+            }`
+          : 'Press start to get reminders every 2 hours'}
       </Text>
 
-      {!isActive && (
-        <View style={styles.pickerContainer}>
-          <Text style={styles.label}>Reminder interval (hours):</Text>
-          <Picker
-            selectedValue={intervalHours}
-            onValueChange={(itemValue) => setIntervalHours(itemValue)}
-            style={styles.picker}
-          >
-            {[...Array(12)].map((_, i) => (
-              <Picker.Item key={i} label={`${i + 1} hour${i ? 's' : ''}`} value={i + 1} />
-            ))}
-          </Picker>
-        </View>
-      )}
+      <View style={styles.progressContainer}>
+        <View style={[styles.progressBar, { width: `${drinkProgress}%` }]} />
+      </View>
+      <Text style={styles.progressText}>
+        {drinkProgress === 100 ? '🎉 Good Job!' : `Hydration: ${drinkProgress}%`}
+      </Text>
 
-      <Button
-        title={isActive ? 'Reminders Active' : 'Start Reminders'}
-        onPress={startReminders}
-        disabled={isActive}
-      />
+      <Button title="Just Drank 💧" onPress={handleDrink} />
+
+      <View style={{ marginTop: 20 }}>
+        <Button
+          title={isActive ? 'Reminders Active' : 'Start Reminders'}
+          onPress={startReminders}
+          disabled={isActive}
+        />
+      </View>
 
       {isActive && (
         <View style={{ marginTop: 10 }}>
           <Button title="Stop Reminders" onPress={stopReminders} color="red" />
         </View>
       )}
+
+      <View style={{ marginTop: 20 }}>
+        <Button title="📈 Water Intake History" onPress={goToHistory} />
+      </View>
     </View>
   );
 }
@@ -150,17 +192,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#333',
   },
-  pickerContainer: {
-    marginBottom: 20,
-    width: '80%',
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  picker: {
-    height: 50,
+  progressContainer: {
     width: '100%',
+    height: 20,
+    backgroundColor: '#eee',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#00BFFF',
+  },
+  progressText: {
+    marginBottom: 10,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
   },
 });
