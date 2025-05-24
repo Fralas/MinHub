@@ -19,12 +19,14 @@ export default function WaterReminder() {
 
   const DRINK_PROGRESS_KEY = 'drinkProgress';
   const LAST_DRINK_DATE_KEY = 'lastDrinkDate';
+  const HISTORY_KEY = 'waterIntakeHistory';
 
   const getTodayDateString = () => {
     const today = new Date();
     return today.toISOString().split('T')[0];
   };
 
+  // Load progress and reset at midnight
   useEffect(() => {
     const loadProgress = async () => {
       try {
@@ -45,6 +47,7 @@ export default function WaterReminder() {
     loadProgress();
   }, []);
 
+  // Save progress daily
   useEffect(() => {
     const saveProgress = async () => {
       try {
@@ -57,6 +60,7 @@ export default function WaterReminder() {
     saveProgress();
   }, [drinkProgress]);
 
+  // Handle app state change to check reminder
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active' && isActive) {
@@ -77,6 +81,7 @@ export default function WaterReminder() {
     };
   }, [isActive, nextReminder]);
 
+  // Set interval to show reminder every 2 hours when active
   useEffect(() => {
     if (isActive) {
       showReminder();
@@ -123,8 +128,22 @@ export default function WaterReminder() {
     setNextReminder(null);
   };
 
+  // Log water intake timestamp into history
+  const logWaterIntake = async () => {
+    try {
+      const now = new Date().toISOString();
+      const historyRaw = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = historyRaw ? JSON.parse(historyRaw) : [];
+      history.push(now);
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+      console.error('Failed to log water intake:', e);
+    }
+  };
+
   const handleDrink = () => {
     setDrinkProgress((prev) => Math.min(prev + 20, 100));
+    logWaterIntake();
   };
 
   const goToHistory = () => {
@@ -193,21 +212,21 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   progressContainer: {
-    width: '100%',
+    width: '80%',
     height: 20,
     backgroundColor: '#eee',
     borderRadius: 10,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#00BFFF',
+    backgroundColor: '#007AFF',
   },
   progressText: {
-    marginBottom: 10,
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    marginBottom: 20,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
