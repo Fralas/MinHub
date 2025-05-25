@@ -5,6 +5,7 @@ export default function DrinkReminderLayout() {
     <Stack>
       <Stack.Screen name="drinkreminder" options={{ title: 'Water Reminder' }} />
       <Stack.Screen name="waterhistory" options={{ title: 'Intake History' }} />
+      <Stack.Screen name="goalsettings" options={{ title: 'Set Daily Goal' }} />
     </Stack>
   );
 }

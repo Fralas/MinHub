@@ -1,66 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  Button,
-  StyleSheet,
-  Alert,
-  AppState,
+  View, Text, Button, StyleSheet, Alert,
+  AppState, TouchableOpacity, ProgressBarAndroid
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 
 export default function WaterReminder() {
   const [isActive, setIsActive] = useState(false);
   const [nextReminder, setNextReminder] = useState<Date | null>(null);
-  const [drinkProgress, setDrinkProgress] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [progressCount, setProgressCount] = useState(0);
+  const [dailyGoal, setDailyGoal] = useState(5);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
 
-  const DRINK_PROGRESS_KEY = 'drinkProgress';
-  const LAST_DRINK_DATE_KEY = 'lastDrinkDate';
-  const HISTORY_KEY = 'waterIntakeHistory';
-
-  const getTodayDateString = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  // Load progress and reset at midnight
   useEffect(() => {
-    const loadProgress = async () => {
-      try {
-        const savedProgress = await AsyncStorage.getItem(DRINK_PROGRESS_KEY);
-        const savedDate = await AsyncStorage.getItem(LAST_DRINK_DATE_KEY);
-        const today = getTodayDateString();
-
-        if (savedDate !== today) {
-          setDrinkProgress(0);
-          await AsyncStorage.setItem(LAST_DRINK_DATE_KEY, today);
-        } else if (savedProgress !== null) {
-          setDrinkProgress(Number(savedProgress));
-        }
-      } catch (e) {
-        console.error('Failed to load drink progress:', e);
-      }
-    };
+    loadGoal();
     loadProgress();
-  }, []);
+  }, [isFocused]);
 
-  // Save progress daily
   useEffect(() => {
-    const saveProgress = async () => {
-      try {
-        await AsyncStorage.setItem(DRINK_PROGRESS_KEY, drinkProgress.toString());
-        await AsyncStorage.setItem(LAST_DRINK_DATE_KEY, getTodayDateString());
-      } catch (e) {
-        console.error('Failed to save drink progress:', e);
-      }
-    };
-    saveProgress();
-  }, [drinkProgress]);
+    const now = new Date();
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const timeUntilMidnight = midnight.getTime() - now.getTime();
 
-  // Handle app state change to check reminder
+    const timeout = setTimeout(() => {
+      setProgressCount(0);
+      saveProgress(0);
+    }, timeUntilMidnight);
+
+    return () => clearTimeout(timeout);
+  }, [progressCount]);
+
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active' && isActive) {
@@ -72,45 +45,35 @@ export default function WaterReminder() {
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
     return () => {
       subscription.remove();
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isActive, nextReminder]);
 
-  // Set interval to show reminder every 2 hours when active
   useEffect(() => {
     if (isActive) {
       showReminder();
       scheduleNextReminder();
-
       intervalRef.current = setInterval(() => {
         showReminder();
         scheduleNextReminder();
-      }, 2 * 60 * 60 * 1000) as unknown as NodeJS.Timeout;
+      }, 2 * 60 * 60 * 1000);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     }
-
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isActive]);
 
   const showReminder = () => {
-    Alert.alert(
-      '💧 Time to drink water!',
-      'Stay hydrated. Drink a glass of water now!',
-      [{ text: 'OK', onPress: () => console.log('Reminder acknowledged') }]
-    );
+    Alert.alert('💧 Time to drink water!', 'Stay hydrated. Drink a glass of water now!', [
+      { text: 'OK', onPress: () => console.log('Reminder acknowledged') }
+    ]);
   };
 
   const scheduleNextReminder = () => {
@@ -119,74 +82,94 @@ export default function WaterReminder() {
     setNextReminder(nextTime);
   };
 
-  const startReminders = () => {
-    setIsActive(true);
-  };
-
-  const stopReminders = () => {
-    setIsActive(false);
-    setNextReminder(null);
-  };
-
-  // Log water intake timestamp into history
-  const logWaterIntake = async () => {
+  const saveProgress = async (value: number) => {
     try {
-      const now = new Date().toISOString();
-      const historyRaw = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = historyRaw ? JSON.parse(historyRaw) : [];
-      history.push(now);
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch (e) {
-      console.error('Failed to log water intake:', e);
+      await AsyncStorage.setItem('hydrationProgress', value.toString());
+    } catch (err) {
+      console.error('Failed to save progress', err);
     }
   };
 
-  const handleDrink = () => {
-    setDrinkProgress((prev) => Math.min(prev + 20, 100));
-    logWaterIntake();
+  const loadProgress = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('hydrationProgress');
+      if (stored) setProgressCount(parseInt(stored));
+    } catch (err) {
+      console.error('Failed to load progress', err);
+    }
   };
 
-  const goToHistory = () => {
-    navigation.navigate('WaterIntakeHistory' as never);
+  const saveGoal = async (goal: number) => {
+    try {
+      await AsyncStorage.setItem('dailyGoal', goal.toString());
+    } catch (err) {
+      console.error('Failed to save goal', err);
+    }
   };
+
+  const loadGoal = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('dailyGoal');
+      if (stored) setDailyGoal(parseInt(stored));
+    } catch (err) {
+      console.error('Failed to load goal', err);
+    }
+  };
+
+  const handleJustDrank = () => {
+    const newCount = progressCount + 1;
+    setProgressCount(newCount);
+    saveProgress(newCount);
+  };
+
+  const progressRatio = Math.min(progressCount / dailyGoal, 1);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>💧 Water Reminder</Text>
+
       <Text style={styles.description}>
         {isActive
-          ? `Next reminder at: ${
-              nextReminder?.toLocaleTimeString() || 'calculating...'
-            }`
+          ? `Next reminder at: ${nextReminder?.toLocaleTimeString() || 'calculating...'}`
           : 'Press start to get reminders every 2 hours'}
       </Text>
 
-      <View style={styles.progressContainer}>
-        <View style={[styles.progressBar, { width: `${drinkProgress}%` }]} />
-      </View>
-      <Text style={styles.progressText}>
-        {drinkProgress === 100 ? '🎉 Good Job!' : `Hydration: ${drinkProgress}%`}
-      </Text>
-
-      <Button title="Just Drank 💧" onPress={handleDrink} />
-
-      <View style={{ marginTop: 20 }}>
-        <Button
-          title={isActive ? 'Reminders Active' : 'Start Reminders'}
-          onPress={startReminders}
-          disabled={isActive}
-        />
-      </View>
+      <Button
+        title={isActive ? 'Reminders Active' : 'Start Reminders'}
+        onPress={() => setIsActive(true)}
+        disabled={isActive}
+      />
 
       {isActive && (
         <View style={{ marginTop: 10 }}>
-          <Button title="Stop Reminders" onPress={stopReminders} color="red" />
+          <Button title="Stop Reminders" onPress={() => {
+            setIsActive(false);
+            setNextReminder(null);
+          }} color="red" />
         </View>
       )}
 
-      <View style={{ marginTop: 20 }}>
-        <Button title="📈 Water Intake History" onPress={goToHistory} />
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>
+          {progressCount >= dailyGoal ? '🎉 Good Job!' : `${progressCount}/${dailyGoal} glasses`}
+        </Text>
+        <ProgressBarAndroid
+          styleAttr="Horizontal"
+          indeterminate={false}
+          progress={progressRatio}
+          color="#00BFFF"
+          style={styles.progressBar}
+        />
       </View>
+
+      <Button title="Just Drank" onPress={handleJustDrank} />
+
+      <TouchableOpacity
+        style={styles.linkButton}
+        onPress={() => navigation.navigate('GoalSettings' as never)}
+      >
+        <Text style={styles.linkText}>⚙️ Set Daily Goal</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -212,21 +195,23 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   progressContainer: {
-    width: '80%',
-    height: 20,
-    backgroundColor: '#eee',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#007AFF',
+    marginTop: 30,
+    width: '100%',
+    paddingHorizontal: 20,
   },
   progressText: {
-    fontSize: 16,
-    marginBottom: 20,
+    textAlign: 'center',
+    marginBottom: 10,
+    fontSize: 18,
+  },
+  progressBar: {
+    height: 10,
+  },
+  linkButton: {
+    marginTop: 20,
+  },
+  linkText: {
     color: '#007AFF',
-    fontWeight: '600',
+    fontSize: 16,
   },
 });
