@@ -9,7 +9,7 @@ function ThemedStack() {
   const { theme, isDark } = useTheme();
   const { t } = useI18n();
 
-  const headerTintColor = isDark ? '#FFFFFF' : '#FFFFFF'; // Assuming white text on primary color
+  const headerTintColor = isDark ? '#FFFFFF' : '#FFFFFF'; 
 
   return (
     <Stack>
