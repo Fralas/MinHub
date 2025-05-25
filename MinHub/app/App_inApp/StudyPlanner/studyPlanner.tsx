@@ -1,7 +1,8 @@
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as Print from 'expo-print';
 import { useFocusEffect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useState } from 'react';
 import {
     Alert,
@@ -19,7 +20,7 @@ import {
     View,
 } from 'react-native';
 
-type EventPriority = 'Alta' | 'Media' | 'Bassa';
+type EventPriority = 'High' | 'Medium' | 'Low';
 type AppTheme = 'light' | 'dark';
 
 interface Course {
@@ -41,24 +42,24 @@ interface Note {
 interface StudyEvent {
   id: string;
   title: string;
-  date: string; 
-  time?: string; 
+  date: string;
+  time?: string;
   description?: string;
-  courseId?: string; 
+  courseId?: string;
   priority?: EventPriority;
 }
 
-const COURSES_KEY = '@StudyPlatform:courses_v6';
-const NOTES_KEY = '@StudyPlatform:notes_v6';
-const EVENTS_KEY = '@StudyPlatform:studyEvents_v6';
-const THEME_KEY = '@StudyPlatform:theme_v6';
+const COURSES_KEY = '@StudyPlatform:courses_v7';
+const NOTES_KEY = '@StudyPlatform:notes_v7';
+const EVENTS_KEY = '@StudyPlatform:studyEvents_v7';
+const THEME_KEY = '@StudyPlatform:theme_v7';
 
 
 const saveData = async (key: string, data: any) => {
   try {
     await AsyncStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.error('Errore nel salvataggio dei dati', key, e);
+    console.error('Error saving data', key, e);
   }
 };
 
@@ -67,7 +68,7 @@ const loadData = async (key: string, defaultValue: any = []) => {
     const jsonValue = await AsyncStorage.getItem(key);
     return jsonValue != null ? JSON.parse(jsonValue) : defaultValue;
   } catch (e) {
-    console.error('Errore nel caricamento dei dati', key, e);
+    console.error('Error loading data', key, e);
     return defaultValue;
   }
 };
@@ -76,8 +77,66 @@ const formatDateToYYYYMMDD = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `<span class="math-inline">\{year\}\-</span>{month}-${day}`;
 };
+
+const generateHtmlContent = (coursesData: Course[], studyEventsData: StudyEvent[], notesData: Note[]): string => {
+  let coursesHtml = coursesData.length > 0 
+    ? coursesData.map(course => {
+        const eventsForCourse = studyEventsData
+          .filter(event => event.courseId === course.id)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        const notesForCourse = notesData.filter(note => note.courseId === course.id);
+
+        let eventsHtml = eventsForCourse.length > 0 
+          ? `<h3>Study Events & Deadlines:</h3><ul>` + eventsForCourse.map(event => 
+              `<li>
+                <strong>${event.title}</strong> - ${new Date(event.date + "T00:00:00").toLocaleDateString('en-GB')}
+                ${event.priority ? `<span class="priority-${event.priority}">(${event.priority} Priority)</span>` : ''}
+                ${event.description ? `<p style="margin: 2px 0 5px 10px; font-size: 0.9em; color: #555;"><em>${event.description.replace(/\n/g, '<br>')}</em></p>` : ''}
+              </li>`).join('') + `</ul>`
+          : '<p>No scheduled events for this course.</p>';
+
+        let notesHtml = notesForCourse.length > 0
+          ? `<h3>Notes:</h3>` + notesForCourse.map(note => 
+              `<div class="note-item">
+                <h4>${note.title} <span class="math-inline">\{note\.completed ? '<span style\="color\: green;"\>\(Completed\)</span\>' \: ''\}</h4\>
+<p\></span>{note.content.replace(/\n/g, '<br>')}</p>
+              </div>`).join('')
+          : '<p>No notes for this course.</p>';
+          
+        return `<div class="course-block"><h2>Course: <span class="math-inline">\{course\.name\}</h2\></span>{eventsHtml}${notesHtml}</div>`;
+      }).join('')
+    : '<p>No courses available to report.</p>';
+
+  return `
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+          h1 { color: #641E7A; border-bottom: 2px solid #641E7A; padding-bottom: 10px; margin-bottom: 20px; text-align: center; }
+          h2 { color: #641E7A; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #9B59B6; padding-bottom: 5px;}
+          h3 { color: #4A0D5C; margin-top: 20px; margin-bottom: 8px; }
+          h4 { color: #333; margin-top: 10px; margin-bottom: 3px; }
+          p { margin: 4px 0; line-height: 1.5; }
+          ul { list-style-type: disc; margin-left: 20px; padding-left: 0; }
+          li { margin-bottom: 8px; }
+          .course-block { margin-bottom: 25px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9;}
+          .note-item { background-color: #fff; border: 1px solid #eee; padding: 10px; border-radius: 4px; margin-bottom: 10px;}
+          .priority-High { color: #E74C3C; font-weight: bold; }
+          .priority-Medium { color: #F39C12; font-weight: bold; }
+          .priority-Low { color: #2ECC71; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <h1>Study Planner Report</h1>
+        ${coursesHtml}
+      </body>
+    </html>
+  `;
+};
+
 
 export default function StudyPlatformScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -105,7 +164,7 @@ export default function StudyPlatformScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentEventDescription, setCurrentEventDescription] = useState('');
   const [eventSelectedCourseId, setEventSelectedCourseId] = useState<string | null>(null);
-  const [currentEventPriority, setCurrentEventPriority] = useState<EventPriority>('Media');
+  const [currentEventPriority, setCurrentEventPriority] = useState<EventPriority>('Medium');
   const [editingEvent, setEditingEvent] = useState<StudyEvent | null>(null);
   
   const [selectedCourseIdForNotes, setSelectedCourseIdForNotes] = useState<string | null>(null);
@@ -130,16 +189,27 @@ export default function StudyPlatformScreen() {
   );
   
   const syncWithCloud = async () => {
-    Alert.alert('Sincronizzazione', 'Funzione di sincronizzazione cloud non ancora implementata.');
+    Alert.alert('Sync with Cloud', 'Cloud sync functionality is not yet implemented.');
   };
   
   const exportToPDF = async () => {
-    Alert.alert('Esportazione PDF', 'Funzione di esportazione PDF non ancora implementata.');
+    const htmlContent = generateHtmlContent(courses, studyEvents, notes);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent, base64: false });
+      if (Platform.OS === "ios") {
+         await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+      } else {
+         await Sharing.shareAsync(uri, { dialogTitle: 'Share or Save PDF', mimeType: 'application/pdf' });
+      }
+    } catch (error) {
+      console.error('Failed to export to PDF', error);
+      Alert.alert('Export Error', 'Could not export your data to PDF.');
+    }
   };
   
   const handleSaveCourse = async () => {
     if (!currentCourseName.trim()) {
-      Alert.alert('Errore', 'Il nome del corso non può essere vuoto.');
+      Alert.alert('Error', 'Course name cannot be empty.');
       return;
     }
     let updatedCourses;
@@ -177,10 +247,10 @@ export default function StudyPlatformScreen() {
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    Alert.alert('Conferma Eliminazione', 'Sei sicuro di voler eliminare questo corso e tutte le note e gli eventi associati?', [
-      { text: 'Annulla', style: 'cancel' },
+    Alert.alert('Confirm Deletion', 'Are you sure you want to delete this course and all associated notes and events?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Elimina',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           const updatedCourses = courses.filter(c => c.id !== courseId);
@@ -203,7 +273,7 @@ export default function StudyPlatformScreen() {
 
   const handleSaveNote = async () => {
     if (!currentNoteTitle.trim() || !noteSelectedCourseId) {
-      Alert.alert('Errore', 'Titolo della nota e corso sono obbligatori.');
+      Alert.alert('Error', 'Note title and course are required.');
       return;
     }
     let updatedNotes;
@@ -257,10 +327,10 @@ export default function StudyPlatformScreen() {
   };
 
   const handleDeleteNote = async (noteId: string) => {
-     Alert.alert('Conferma Eliminazione', 'Sei sicuro di voler eliminare questa nota?', [
-      { text: 'Annulla', style: 'cancel' },
+     Alert.alert('Confirm Deletion', 'Are you sure you want to delete this note?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Elimina',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
             const updatedNotes = notes.filter(n => n.id !== noteId);
@@ -273,7 +343,7 @@ export default function StudyPlatformScreen() {
 
   const handleSaveEvent = async () => {
     if (!currentEventTitle.trim()) {
-      Alert.alert('Errore', 'Il titolo dell\'evento è obbligatorio.');
+      Alert.alert('Error', 'Event title is required.');
       return;
     }
     let updatedEvents;
@@ -308,14 +378,14 @@ export default function StudyPlatformScreen() {
       setCurrentEventDate(new Date(event.date + "T00:00:00"));
       setCurrentEventDescription(event.description || '');
       setEventSelectedCourseId(event.courseId || null);
-      setCurrentEventPriority(event.priority || 'Media');
+      setCurrentEventPriority(event.priority || 'Medium');
     } else {
       setEditingEvent(null);
       setCurrentEventTitle('');
       setCurrentEventDate(new Date());
       setCurrentEventDescription('');
       setEventSelectedCourseId(courses.length > 0 ? courses[0].id : null);
-      setCurrentEventPriority('Media');
+      setCurrentEventPriority('Medium');
     }
     setIsEventModalVisible(true);
   };
@@ -327,14 +397,14 @@ export default function StudyPlatformScreen() {
     setCurrentEventDescription('');
     setEditingEvent(null);
     setEventSelectedCourseId(null);
-    setCurrentEventPriority('Media');
+    setCurrentEventPriority('Medium');
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    Alert.alert('Conferma Eliminazione', 'Sei sicuro di voler eliminare questo evento?', [
-      { text: 'Annulla', style: 'cancel' },
+    Alert.alert('Confirm Deletion', 'Are you sure you want to delete this event?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Elimina',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
             const updatedEvents = studyEvents.filter(e => e.id !== eventId);
@@ -346,10 +416,9 @@ export default function StudyPlatformScreen() {
   };
 
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios'); 
-    if (selectedDate) {
-      setCurrentEventDate(selectedDate);
-    }
+    const currentDate = selectedDate || currentEventDate;
+    setShowDatePicker(Platform.OS === 'ios');
+    setCurrentEventDate(currentDate);
   };
   
   const toggleTheme = async () => {
@@ -365,9 +434,9 @@ export default function StudyPlatformScreen() {
   const getPriorityStyle = (priority?: EventPriority) => {
     if (!priority) return {};
     switch (priority) {
-        case 'Alta': return styles.priorityHigh;
-        case 'Media': return styles.priorityMedium;
-        case 'Bassa': return styles.priorityLow;
+        case 'High': return styles.priorityHigh;
+        case 'Medium': return styles.priorityMedium;
+        case 'Low': return styles.priorityLow;
         default: return {};
     }
   };
