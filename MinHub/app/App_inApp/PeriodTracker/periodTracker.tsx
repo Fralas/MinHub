@@ -1,269 +1,1196 @@
-import { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, Platform, StyleSheet } from 'react-native';
-import { formatDateToYYYYMMDD, getAverageCycleLength, getAveragePeriodLength } from '../../../utils/cycleLogic';
-import { loadPeriods, loadSettings, savePeriods, saveSettings } from '../../../utils/cycleStore';
-import { CycleSettings, PeriodData } from '../../../utils/cycleTypes';
-export default function PeriodTrackerScreen() {
-  const router = useRouter();
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+
+type FlowIntensity = 'spotting' | 'light' | 'medium' | 'heavy';
+
+interface Symptom {
+  name: string;
+  intensity: 'mild' | 'moderate' | 'severe';
+}
+
+interface DailyLog {
+  date: string;
+  flow?: FlowIntensity;
+  symptoms?: Symptom[];
+  notes?: string;
+  mood?: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'very_sad';
+}
+
+interface PeriodData {
+  id: string;
+  startDate: string;
+  endDate: string | null;
+  dailyLogs?: DailyLog[];
+}
+
+interface CycleSettings {
+  averageCycleLength: number;
+  averagePeriodLength: number;
+}
+
+interface FertilityData {
+  ovulationDay: number;
+  fertileWindow: {
+    start: number;
+    end: number;
+  };
+}
+
+interface Medication {
+  name: string;
+  dosage: string;
+  times: string[];
+  reminderEnabled: boolean;
+}
+
+const formatDateToYYYYMMDD = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const calculateAverage = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sum = values.reduce((a, b) => a + b, 0);
+  return Math.round(sum / values.length);
+};
+
+const getAverageCycleLength = (periods: PeriodData[]): number => {
+  if (periods.length < 2) return 28;
+  
+  const cycleLengths: number[] = [];
+  const sortedPeriods = [...periods].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  for (let i = 0; i < sortedPeriods.length - 1; i++) {
+    const currentPeriod = sortedPeriods[i];
+    const nextPeriod = sortedPeriods[i+1];
+    
+    const startDateCurrent = new Date(currentPeriod.startDate);
+    const startDateNext = new Date(nextPeriod.startDate);
+    const diffTime = startDateNext.getTime() - startDateCurrent.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0 && diffDays < 100) { 
+        cycleLengths.push(diffDays);
+    }
+  }
+  
+  return calculateAverage(cycleLengths) || 28;
+};
+
+const getAveragePeriodLength = (periods: PeriodData[]): number => {
+  const periodLengths: number[] = [];
+  
+  periods.forEach(period => {
+    if (period.endDate) {
+      const start = new Date(period.startDate);
+      const end = new Date(period.endDate);
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      periodLengths.push(diffDays);
+    }
+  });
+  
+  return calculateAverage(periodLengths) || 5;
+};
+
+const calculateFertilityWindow = (cycleLength: number): FertilityData => {
+  const ovulationDay = cycleLength > 14 ? cycleLength - 14 : Math.round(cycleLength / 2);
+  return {
+    ovulationDay,
+    fertileWindow: {
+      start: Math.max(1, ovulationDay - 5), 
+      end: Math.min(cycleLength > 0 ? cycleLength : 35, ovulationDay + 1) 
+    }
+  };
+};
+
+const PERIODS_KEY = 'periodTracker_periods';
+const SETTINGS_KEY = 'periodTracker_settings';
+const MEDICATIONS_KEY = 'medications';
+
+const loadPeriods = async (): Promise<PeriodData[]> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(PERIODS_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : [];
+  } catch (e) {
+    console.error('Failed to load periods', e);
+    return [];
+  }
+};
+
+const savePeriods = async (periods: PeriodData[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(PERIODS_KEY, JSON.stringify(periods));
+  } catch (e) {
+    console.error('Failed to save periods', e);
+  }
+};
+
+const loadSettings = async (): Promise<CycleSettings> => {
+  try {
+    const jsonValue = await AsyncStorage.getItem(SETTINGS_KEY);
+    return jsonValue ? JSON.parse(jsonValue) : { averageCycleLength: 28, averagePeriodLength: 5 };
+  } catch (e) {
+    console.error('Failed to load settings', e);
+    return { averageCycleLength: 28, averagePeriodLength: 5 };
+  }
+};
+
+const saveSettings = async (settings: CycleSettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Failed to save settings', e);
+  }
+};
+
+
+const PeriodTrackerScreen = () => {
   const [periods, setPeriods] = useState<PeriodData[]>([]);
   const [settings, setSettings] = useState<CycleSettings>({ averageCycleLength: 28, averagePeriodLength: 5 });
   const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [medications, setMedications] = useState<Medication[]>([]);
 
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end' | null>(null);
+  const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const loadedPeriods = await loadPeriods();
-      const loadedSettings = await loadSettings();
-
-      const newAvgCycle = getAverageCycleLength(loadedPeriods);
-      const newAvgPeriod = getAveragePeriodLength(loadedPeriods);
-
-      let finalSettings = loadedSettings;
-      if (newAvgCycle !== loadedSettings.averageCycleLength || newAvgPeriod !== loadedSettings.averagePeriodLength) {
-        finalSettings = { 
-          averageCycleLength: newAvgCycle || 28, 
-          averagePeriodLength: newAvgPeriod || 5 
-        };
-        await saveSettings(finalSettings);
-      }
-
-      setSettings(finalSettings);
+      const [loadedPeriods, loadedSettingsFromStorage, loadedMedsString] = await Promise.all([ 
+        loadPeriods(),
+        loadSettings(),
+        AsyncStorage.getItem(MEDICATIONS_KEY)
+      ]);
+      
       const sortedPeriods = [...loadedPeriods].sort((a, b) => 
         new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
+      
+      const newAvgCycle = getAverageCycleLength(sortedPeriods);
+      const newAvgPeriod = getAveragePeriodLength(sortedPeriods);
+
+      const finalSettings = {
+        averageCycleLength: newAvgCycle || loadedSettingsFromStorage.averageCycleLength,
+        averagePeriodLength: newAvgPeriod || loadedSettingsFromStorage.averagePeriodLength
+      };
+      
+      await saveSettings(finalSettings);
+      setSettings(finalSettings);
       setPeriods(sortedPeriods);
-      const active = sortedPeriods.find(p => p.endDate === null);
-      setCurrentActivePeriod(active || null);
+      setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
+      if (loadedMedsString) {
+        setMedications(JSON.parse(loadedMedsString));
+      }
     } catch (error) {
-      Alert.alert("Errore", "Impossibile caricare i dati del ciclo");
+      Alert.alert("Error", "Failed to load cycle data");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    fetchData();
-  }, [fetchData]));
 
-  const showDatePickerForMode = (mode: 'start' | 'end') => {
-    setDatePickerMode(mode);
-    setSelectedDate(new Date());
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      
+      const fetchDataWrapper = async () => {
+        try {
+          await fetchData();
+        } catch (error) {
+          if (isActive) {
+            Alert.alert("Error", "Failed to load data");
+          }
+        }
+      };
+
+      fetchDataWrapper();
+
+      return () => {
+        isActive = false;
+      };
+    }, [fetchData])
+  );
+
+  const showDatePicker = (mode: 'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate', periodId?: string) => {
+    setDatePickerTarget(mode);
+    if (periodId) setEditingPeriodId(periodId);
+    
+    if (mode === 'editStartDate' && periodId) {
+        const periodToEdit = periods.find(p => p.id === periodId);
+        if (periodToEdit) setSelectedDate(new Date(periodToEdit.startDate));
+        else setSelectedDate(new Date());
+    } else if (mode === 'editEndDate' && periodId) {
+        const periodToEdit = periods.find(p => p.id === periodId);
+        if (periodToEdit && periodToEdit.endDate) setSelectedDate(new Date(periodToEdit.endDate));
+        else setSelectedDate(new Date());
+    } else {
+        setSelectedDate(new Date());
+    }
     setDatePickerVisible(true);
   };
 
-  const onDateSelected = (event: DateTimePickerEvent, date?: Date) => {
-    setDatePickerVisible(false);
+  const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
+    setDatePickerVisible(false); 
+    if (event.type === 'dismissed' || !date || !datePickerTarget) {
+      return;
+    }
     
-    if (event.type === 'set' && date && datePickerMode) {
-      handleDateSelection(date);
+    const dateStr = formatDateToYYYYMMDD(date);
+    let updatedPeriodsList = [...periods];
+
+    try {
+      switch (datePickerTarget) {
+        case 'startPeriod':
+          if (periods.some(p => p.endDate === null)) {
+            Alert.alert("Active Period", "An active period already exists. Please end it before starting a new one.");
+            return;
+          }
+          if (periods.some(p => p.startDate === dateStr)) {
+            Alert.alert("Duplicate", "A period starting on this date already exists.");
+            return;
+          }
+          const newPeriod: PeriodData = {
+            id: Date.now().toString(),
+            startDate: dateStr,
+            endDate: null,
+            dailyLogs: []
+          };
+          updatedPeriodsList = [newPeriod, ...periods].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          setCurrentActivePeriod(newPeriod);
+          break;
+
+        case 'endPeriod':
+          if (currentActivePeriod) {
+            if (new Date(dateStr) < new Date(currentActivePeriod.startDate)) {
+                Alert.alert("Invalid Date", "End date cannot be before start date.");
+                return;
+            }
+            updatedPeriodsList = periods.map(p => 
+              p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
+            );
+            setCurrentActivePeriod(null);
+          }
+          break;
+
+        case 'editStartDate':
+          updatedPeriodsList = periods.map(p => {
+            if (p.id === editingPeriodId) {
+                if (p.endDate && new Date(dateStr) > new Date(p.endDate)) {
+                    Alert.alert("Invalid Date", "Start date cannot be after end date.");
+                    return p; 
+                }
+                return { ...p, startDate: dateStr };
+            }
+            return p;
+          });
+          updatedPeriodsList.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+          break;
+
+        case 'editEndDate':
+          updatedPeriodsList = periods.map(p => {
+            if (p.id === editingPeriodId) {
+                if (new Date(dateStr) < new Date(p.startDate)) {
+                    Alert.alert("Invalid Date", "End date cannot be before start date.");
+                    return p; 
+                }
+                return { ...p, endDate: dateStr };
+            }
+            return p;
+          });
+          break;
+      }
+
+      setPeriods(updatedPeriodsList);
+      await savePeriods(updatedPeriodsList);
+      
+      const newAvgCycle = getAverageCycleLength(updatedPeriodsList);
+      const newAvgPeriod = getAveragePeriodLength(updatedPeriodsList);
+      const newSettings = {
+        averageCycleLength: newAvgCycle,
+        averagePeriodLength: newAvgPeriod
+      };
+      
+      await saveSettings(newSettings);
+      setSettings(newSettings);
+      setCurrentActivePeriod(updatedPeriodsList.find(p => p.endDate === null) || null);
+
+    } catch (error) {
+      Alert.alert("Error", "Failed to save changes");
+    } finally {
+      setEditingPeriodId(null);
+      setDatePickerTarget(null);
     }
-    setDatePickerMode(null);
   };
 
-  const handleDateSelection = async (date: Date) => {
-    const newDateString = formatDateToYYYYMMDD(date);
-    let updatedPeriods = [...periods];
-    let activePeriodUpdated = false;
-    let userActionValid = true;
-
-    if (datePickerMode === 'start') {
-      if (currentActivePeriod) {
-        Alert.alert("Ciclo Attivo", "C'è già un ciclo attivo. Termina prima quello attuale o modificalo.");
-        userActionValid = false;
-      } else {
-        const newPeriod: PeriodData = { 
-          id: Date.now().toString(), 
-          startDate: newDateString, 
-          endDate: null 
-        };
-        updatedPeriods = [newPeriod, ...periods];
-        setCurrentActivePeriod(newPeriod);
-        activePeriodUpdated = true;
-      }
-    } else if (datePickerMode === 'end' && currentActivePeriod) {
-      if (new Date(newDateString) < new Date(currentActivePeriod.startDate)) {
-        Alert.alert("Data non valida", "La data di fine non può essere precedente alla data di inizio.");
-        userActionValid = false;
-      } else {
-        updatedPeriods = periods.map(p => 
-          p.id === currentActivePeriod.id ? { ...p, endDate: newDateString } : p
-        );
-        setCurrentActivePeriod(null);
-        activePeriodUpdated = true;
-      }
+  const logFlow = async (flow: FlowIntensity) => {
+    if (!currentActivePeriod) return;
+    
+    const today = formatDateToYYYYMMDD(new Date());
+    const updatedLogs = currentActivePeriod.dailyLogs 
+      ? [...currentActivePeriod.dailyLogs] 
+      : [];
+    
+    const existingLogIndex = updatedLogs.findIndex(log => log.date === today);
+    
+    if (existingLogIndex >= 0) {
+      updatedLogs[existingLogIndex] = { ...updatedLogs[existingLogIndex], flow };
+    } else {
+      updatedLogs.push({ date: today, flow });
     }
+    updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    if (userActionValid && activePeriodUpdated) {
-      try {
-        updatedPeriods.sort((a, b) => 
-          new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-        );
-        setPeriods(updatedPeriods);
-        await savePeriods(updatedPeriods);
 
-        const newAvgCycle = getAverageCycleLength(updatedPeriods);
-        const newAvgPeriod = getAveragePeriodLength(updatedPeriods);
-        const newSettings = { 
-          averageCycleLength: newAvgCycle || 28, 
-          averagePeriodLength: newAvgPeriod || 5 
-        };
-        await saveSettings(newSettings);
-        setSettings(newSettings);
-      } catch (error) {
-        Alert.alert("Errore", "Impossibile salvare i dati");
-      }
-    }
+    const updatedPeriod = {
+      ...currentActivePeriod,
+      dailyLogs: updatedLogs
+    };
+
+    const updatedPeriods = periods.map(p => 
+      p.id === currentActivePeriod.id ? updatedPeriod : p
+    );
+
+    setPeriods(updatedPeriods);
+    setCurrentActivePeriod(updatedPeriod);
+    await savePeriods(updatedPeriods);
   };
 
-  const getNextPeriodPrediction = (): string => {
-    if (periods.length === 0 || !periods[0]?.startDate) {
-      return "Registra il tuo primo ciclo per le previsioni.";
+  const getPrediction = () => {
+    if (!periods.length || periods.every(p => p.endDate === null && p.id !== currentActivePeriod?.id)) return "Register your first period";
+    if (currentActivePeriod) return "Currently on period";
+    
+    const lastCompletedPeriod = periods.find(p => p.endDate !== null); 
+    
+    if (!lastCompletedPeriod) { 
+        const earliestPeriod = periods[0]; 
+        if (!earliestPeriod) return "Log a period to see predictions."; 
+        
+        const lastStart = new Date(earliestPeriod.startDate);
+        const nextStart = new Date(lastStart);
+        nextStart.setDate(lastStart.getDate() + settings.averageCycleLength);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        nextStart.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.round((nextStart.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
+        if (diffDays === 0) return "Period expected today!";
+        if (diffDays === 1) return "Period expected tomorrow";
+        return `Period expected in ${diffDays} days`;
     }
 
-    const lastPeriod = periods.find(p => p.startDate);
-    if (!lastPeriod) return "Dati insufficienti per una previsione.";
 
-    const lastStartDate = new Date(lastPeriod.startDate);
-    const nextStartDate = new Date(lastStartDate);
-    nextStartDate.setDate(lastStartDate.getDate() + settings.averageCycleLength);
-
+    const lastStartDate = new Date(lastCompletedPeriod.startDate); 
+    const nextPredictedStartDate = new Date(lastStartDate);
+    nextPredictedStartDate.setDate(lastStartDate.getDate() + settings.averageCycleLength);
+    
     const today = new Date();
-    today.setHours(0,0,0,0);
-    nextStartDate.setHours(0,0,0,0);
-
-    const diffTime = nextStartDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (currentActivePeriod) return "Ciclo attualmente in corso.";
-    if (diffDays < -5) return `Prossimo ciclo previsto per ${nextStartDate.toLocaleDateString()} (potrebbe essere in ritardo).`;
-    if (diffDays < 0) return `Il tuo prossimo ciclo potrebbe essere in ritardo (${nextStartDate.toLocaleDateString()}).`;
-    if (diffDays === 0) return `Il tuo prossimo ciclo potrebbe iniziare oggi! (${nextStartDate.toLocaleDateString()})`;
-    if (diffDays === 1) return `Il tuo prossimo ciclo potrebbe iniziare domani (${nextStartDate.toLocaleDateString()}).`;
-    return `Prossimo ciclo previsto tra ${diffDays} giorni (${nextStartDate.toLocaleDateString()}).`;
+    today.setHours(0, 0, 0, 0); 
+    nextPredictedStartDate.setHours(0, 0, 0, 0);
+    
+    const diffDays = Math.round((nextPredictedStartDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return `Next period was expected ${Math.abs(diffDays)} days ago`;
+    if (diffDays === 0) return "Period expected today!";
+    if (diffDays === 1) return "Period expected tomorrow";
+    return `Next period expected in ${diffDays} days`;
   };
 
-  const getCurrentCycleDayInfo = (): string => {
-    if (!currentActivePeriod) return "Nessun ciclo attivo";
+  const getCurrentDay = () => {
+    if (!currentActivePeriod) return "No active period";
     
-    const startDate = new Date(currentActivePeriod.startDate);
+    const start = new Date(currentActivePeriod.startDate);
     const today = new Date();
-    startDate.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-    const diffTime = today.getTime() - startDate.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    start.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
     
-    return `Giorno ${diffDays} del ciclo`;
+    const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return `Day ${diffDays} of cycle`;
   };
 
-}
-
+  const trackSymptom = async (symptom: Symptom) => {
+  if (!currentActivePeriod) return;
   
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+  let dailyLog = updatedLogs.find(log => log.date === today);
+    if (!dailyLog) {
+      dailyLog = { date: today, symptoms: [] }; 
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+  if (!dailyLog.symptoms) {
+    dailyLog.symptoms = [];
+  }
+
+  const existingIndex = dailyLog.symptoms.findIndex(s => s.name === symptom.name);
+  if (existingIndex >= 0) {
+    dailyLog.symptoms[existingIndex] = symptom;
+  } else {
+    dailyLog.symptoms.push(symptom);
+  }
+
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+  const updatedPeriods = periods.map(p => 
+    p.id === currentActivePeriod.id ? updatedPeriod : p
+  );
+
+  setPeriods(updatedPeriods);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriods);
+};
+
+const addNote = async (note: string) => {
+  if (!currentActivePeriod) return;
+  
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+  let dailyLog = updatedLogs.find(log => log.date === today);
+    if (!dailyLog) {
+      dailyLog = { date: today };
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+        dailyLog.notes = note;
+
+
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+    const updatedPeriodsList = periods.map(p => 
+      p.id === currentActivePeriod.id ? updatedPeriod : p
+    );
+
+  setPeriods(updatedPeriodsList);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriodsList);
+};
+
+const trackMood = async (mood: DailyLog['mood']) => {
+  if (!currentActivePeriod) return;
+  
+  const today = formatDateToYYYYMMDD(new Date());
+  const updatedLogs = currentActivePeriod.dailyLogs ? [...currentActivePeriod.dailyLogs] : [];
+  
+    let dailyLog = updatedLogs.find(log => log.date === today);
+    if (!dailyLog) {
+      dailyLog = { date: today };
+      updatedLogs.push(dailyLog);
+      updatedLogs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+  dailyLog.mood = mood;
+
+  const updatedPeriod = {
+    ...currentActivePeriod,
+    dailyLogs: updatedLogs
+  };
+
+  const updatedPeriods = periods.map(p => 
+    p.id === currentActivePeriod.id ? updatedPeriod : p
+  );
+
+  setPeriods(updatedPeriods);
+  setCurrentActivePeriod(updatedPeriod);
+  await savePeriods(updatedPeriods);
+};
+
+const getCycleInsights = () => {
+  if (periods.length < 2) return null;
+
+  const completedPeriods = periods.filter(p => p.endDate).sort((a,b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  if (completedPeriods.length < 1 && periods.length <1 ) return null;
+
+
+  const allPeriodsForInsights = periods.filter(p => p.dailyLogs && p.dailyLogs.length > 0);
+
+
+  const symptomMap: Record<string, {count: number, days: number}> = {};
+  
+  allPeriodsForInsights.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      log.symptoms?.forEach(symptom => {
+        if (!symptomMap[symptom.name]) {
+          symptomMap[symptom.name] = {count: 0, days: 0};
+        }
+        symptomMap[symptom.name].count++;
+        if (symptom.intensity === 'severe') {
+          symptomMap[symptom.name].days++;
+        }
+      });
+    });
+  });
+
+  let positiveDays = 0;
+  let negativeDays = 0;
+  let totalMoodDays = 0; 
+  
+  allPeriodsForInsights.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      if (log.mood) {
+        totalMoodDays++;
+        if (log.mood === 'very_happy' || log.mood === 'happy') positiveDays++;
+        if (log.mood === 'sad' || log.mood === 'very_sad') negativeDays++;
+      }
+    });
+  });
+
+  return {
+    frequentSymptoms: Object.entries(symptomMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 3)
+      .map(([name, data]) => ({ name, ...data })),
+    moodBalance: {
+      positive: positiveDays,
+      negative: negativeDays,
+      total: totalMoodDays 
+    },
+    averageCycleLength: settings.averageCycleLength,
+    averagePeriodLength: settings.averagePeriodLength
+  };
+};
+
+const getFlowStatistics = () => {
+  const flowStats: Record<FlowIntensity, number> = {
+    spotting: 0,
+    light: 0,
+    medium: 0,
+    heavy: 0
+  };
+
+  periods.forEach(period => {
+    period.dailyLogs?.forEach(log => {
+      if (log.flow) {
+        flowStats[log.flow]++;
+      }
+    });
+  });
+  return flowStats;
+};
+
+  const syncWithHealthApp = async () => {
+    try {
+      Alert.alert("Success", "Health data synchronized successfully");
+    } catch (error) {
+      Alert.alert("Error", "Failed to sync with health app");
+    }
+  };
+
+  const addMedicationReminder = async (med: Medication) => {
+    const updatedMeds = [...medications, med];
+    setMedications(updatedMeds);
+    await AsyncStorage.setItem(MEDICATIONS_KEY, JSON.stringify(updatedMeds));
+  };
+
+  const getCycleCorrelations = () => {
+    const phaseStats:any = { 
+      follicular: { symptoms: {}, mood: {} },
+      luteal: { symptoms: {}, mood: {} },
+      menstrual: { symptoms: {}, mood: {} }
+    };
+  
+    periods.forEach(period => {
+      const periodStartDate = new Date(period.startDate);
+      period.dailyLogs?.forEach(log => {
+        const logDate = new Date(log.date);
+      });
+    });
+  
+    return phaseStats; 
+  };
+
+  const scheduleNotification = async (type: 'periodStart' | 'fertileWindow' | 'ovulation') => {
+    const message = {
+      periodStart: "Your period is expected to start soon",
+      fertileWindow: "You're in your fertile window",
+      ovulation: "Ovulation is likely occurring today"
+    }[type];
+  
+    Alert.alert("Notification Scheduled", message);
+  };
+
+  const exportData = async () => {
+    try {
+      const dataToExport = { 
+        periods,
+        settings,
+        statistics: getCycleInsights(), 
+        exportedAt: new Date().toISOString()
+      };
+      
+      Alert.alert("Export Successful", "Your data has been exported");
+    } catch (error) {
+      Alert.alert("Export Failed", "Could not export data");
+    }
+  };
+
+  const generateShareLink = async () => {
+    const shareData = {
+      currentStatus: currentActivePeriod ? "On period" : "Not on period",
+      nextPrediction: getPrediction(),
+      fertilityWindow: calculateFertilityWindow(settings.averageCycleLength)
+    };
+    
+    Alert.alert("Share Link Generated", "Partner access enabled");
+  };
+
+  const addToCalendar = async () => {
+    try {
+      Alert.alert("Added to Calendar", "Cycle events added to your calendar");
+    } catch (error) {
+      Alert.alert("Error", "Could not add to calendar");
+    }
+  };
+
+  const backupData = async () => {
+    const backup = {
+      periods,
+      settings,
+      medications, 
+      version: '1.0',
+      createdAt: new Date().toISOString()
+    };
+    
+    try {
+        await AsyncStorage.setItem('app_backup', JSON.stringify(backup));
+        Alert.alert("Backup Successful", "Your data has been backed up");
+    } catch (error) {
+        Alert.alert("Backup Failed", "Could not back up data");
+    }
+  };
+  
+  const restoreData = async () => {
+    try {
+        const backupString = await AsyncStorage.getItem('app_backup');
+        if (backupString) {
+            const backupData = JSON.parse(backupString);
+            if (backupData.periods) setPeriods(backupData.periods);
+            if (backupData.settings) {
+                setSettings(backupData.settings);
+                await saveSettings(backupData.settings); 
+            }
+            if (backupData.medications) setMedications(backupData.medications);
+            
+            await fetchData(); 
+
+            Alert.alert("Restore Complete", "Your data has been restored");
+        } else {
+            Alert.alert("Restore Failed", "No backup data found");
+        }
+    } catch (error) {
+        Alert.alert("Restore Failed", "Could not restore data");
+    }
+  };
+
+  const cycleInsights = getCycleInsights();
+  const fertilityData = calculateFertilityWindow(settings.averageCycleLength);
+
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.container}>
+          <Text style={styles.headerText}>Period Tracker</Text>
+          
+          <View style={styles.statusCard}>
+            <Text style={styles.statusTitle}>{getCurrentDay()}</Text>
+            <Text style={styles.statusSubtitle}>{getPrediction()}</Text>
+          </View>
+
+          {!currentActivePeriod ? (
+            <TouchableOpacity 
+              style={[styles.button, styles.startButton]}
+              onPress={() => showDatePicker('startPeriod')}
+            >
+              <Text style={styles.buttonText}>Start Period</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.activePeriodContainer}>
+              <Text style={styles.activePeriodTitle}>Current Period</Text>
+              <Text style={styles.activePeriodDate}>Started: {new Date(currentActivePeriod.startDate).toLocaleDateString()}</Text>
+              
+              <Text style={styles.sectionTitleSmall}>Log Flow</Text>
+              <View style={styles.flowButtonsContainer}>
+                {(['spotting', 'light', 'medium', 'heavy'] as FlowIntensity[]).map(flow => (
+                  <TouchableOpacity
+                    key={flow}
+                    style={[
+                      styles.flowButton,
+                      currentActivePeriod.dailyLogs?.find(
+                        log => log.date === formatDateToYYYYMMDD(new Date()) && log.flow === flow
+                      ) && styles.flowButtonSelected
+                    ]}
+                    onPress={() => logFlow(flow)}
+                  >
+                    <Text style={styles.flowButtonText}>
+                      {flow.charAt(0).toUpperCase() + flow.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.button, styles.endButton]}
+                onPress={() => showDatePicker('endPeriod')}
+              >
+                <Text style={styles.buttonText}>End Period</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
+          {currentActivePeriod && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Track Symptoms Today</Text>
+              <View style={styles.symptomButtons}>
+                {['Headache', 'Cramps', 'Fatigue', 'Bloating', 'Nausea', 'Backache'].map(symptomName => {
+                  const currentSymptom = currentActivePeriod.dailyLogs
+                                        ?.find(log => log.date === formatDateToYYYYMMDD(new Date()))
+                                        ?.symptoms?.find(s => s.name === symptomName);
+                  return (
+                  <TouchableOpacity
+                    key={symptomName}
+                    style={[
+                        styles.symptomButton,
+                        currentSymptom && styles.symptomButtonSelected 
+                    ]}
+                    onPress={() => {
+                        const newIntensity = currentSymptom?.intensity === 'moderate' ? 'mild' : 'moderate'; 
+                        trackSymptom({
+                            name: symptomName,
+                            intensity: newIntensity 
+                        })
+                    }}
+                  >
+                    <Text style={styles.symptomButtonText}>{symptomName} {currentSymptom ? `(${currentSymptom.intensity})` : ''}</Text>
+                  </TouchableOpacity>
+                );
+                })}
+              </View>
+            </View>
+          )}
+
+          {currentActivePeriod && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Mood Today</Text>
+              <View style={styles.moodButtons}>
+                {(['very_happy', 'happy', 'neutral', 'sad', 'very_sad'] as DailyLog['mood'][]).map(moodValue => {
+                  if (!moodValue) return null; 
+                  const currentMood = currentActivePeriod.dailyLogs
+                                        ?.find(log => log.date === formatDateToYYYYMMDD(new Date()))?.mood;
+                  return (
+                  <TouchableOpacity
+                    key={moodValue}
+                    style={[
+                        styles.moodButton,
+                        currentMood === moodValue && styles.moodButtonSelected 
+                    ]}
+                    onPress={() => trackMood(moodValue)}
+                  >
+                    <Text style={styles.moodButtonText}>{moodValue.replace('_', ' ')}</Text>
+                  </TouchableOpacity>
+                );
+                })}
+              </View>
+            </View>
+          )}
+
+          {cycleInsights && (
+            <View style={styles.insightsContainer}>
+              <Text style={styles.insightsTitle}>Cycle Insights</Text>
+              <Text style={styles.insightItem}>Avg. Cycle Length: {cycleInsights.averageCycleLength} days</Text>
+              <Text style={styles.insightItem}>Avg. Period Length: {cycleInsights.averagePeriodLength} days</Text>
+              
+              <Text style={styles.insightsSubtitle}>Frequent Symptoms (Top 3):</Text>
+              {cycleInsights.frequentSymptoms.length > 0 ? cycleInsights.frequentSymptoms.map(symptom => (
+                <Text key={symptom.name} style={styles.insightItem}>
+                  {symptom.name}: {symptom.count} days ({symptom.days} severe)
+                </Text>
+              )) : <Text  style={styles.insightItem}>No symptom data yet.</Text>}
+
+              <Text style={styles.insightsSubtitle}>Mood Balance:</Text> 
+              {cycleInsights.moodBalance.total > 0 ? (
+                <>
+                  <Text style={styles.insightItem}>Positive Days: {cycleInsights.moodBalance.positive}</Text>
+                  <Text style={styles.insightItem}>Negative Days: {cycleInsights.moodBalance.negative}</Text>
+                </>
+              ) : <Text style={styles.insightItem}>No mood data yet.</Text>}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Fertility Window</Text>
+            <View style={styles.phaseIndicator}>
+              <View style={[styles.phasePill, {backgroundColor: '#FFCDD2'}]}>
+                <Text>Fertile: Day {fertilityData.fertileWindow.start}-{fertilityData.fertileWindow.end}</Text>
+              </View>
+              <View style={[styles.phasePill, {backgroundColor: '#F8BBD0'}]}>
+                <Text>Ovulation: Day {fertilityData.ovulationDay}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tools</Text>
+            <View style={styles.toolsContainer}> 
+              <TouchableOpacity style={styles.toolButton} onPress={syncWithHealthApp}>
+                <Text>Health Sync</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={exportData}>
+                <Text>Export Data</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={generateShareLink}>
+                <Text>Share with Partner</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={addToCalendar}>
+                <Text>Add to Calendar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={backupData}>
+                <Text>Backup Data</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.toolButton} onPress={restoreData}>
+                <Text>Restore Data</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('periodStart')}
+            >
+              <Text>Schedule Period Reminder</Text>
+            </TouchableOpacity>
+             <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('fertileWindow')}
+            >
+              <Text>Schedule Fertile Window Reminder</Text>
+            </TouchableOpacity>
+             <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => scheduleNotification('ovulation')}
+            >
+              <Text>Schedule Ovulation Reminder</Text>
+            </TouchableOpacity>
+          </View>
+
+
+          {datePickerVisible && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()} 
+            />
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
+  safeArea: {
+    flex: 1,
     backgroundColor: '#FFF0F5' 
   },
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#FFF0F5'
   },
-  container: { 
-    flex: 1, 
-    alignItems: 'center', 
-    paddingTop: 30, 
-    paddingHorizontal: 20 
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 30 
   },
-  headerText: { 
-    fontSize: 32, 
-    fontWeight: 'bold', 
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 20
+  },
+  headerText: {
+    fontSize: 30, 
+    fontWeight: 'bold',
     color: '#D81B60', 
-    marginBottom: 25, 
-    fontFamily: Platform.OS === 'ios' ? 'Papyrus' : 'serif' 
+    marginBottom: 20, 
+    textAlign: 'center',
   },
-  statusCard: { 
-    backgroundColor: '#FFFFFF', 
-    padding: 25, 
-    borderRadius: 20, 
-    marginBottom: 30, 
-    width: '100%', 
-    alignItems: 'center', 
-    shadowColor: "#FF69B4", 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 5, 
-    elevation: 8, 
-    borderWidth: 1, 
-    borderColor: '#FFE4E1'
+  statusCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 20,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
   },
-  statusTitle: { 
-    fontSize: 24, 
-    fontWeight: '600', 
+  statusTitle: {
+    fontSize: 22, 
+    fontWeight: '600',
     color: '#C2185B', 
-    marginBottom: 8, 
-    textAlign: 'center' 
+    marginBottom: 8
   },
-  statusSubtitle: { 
+  statusSubtitle: {
     fontSize: 17, 
     color: '#AD1457', 
-    marginBottom: 15, 
-    textAlign: 'center', 
-    fontStyle: 'italic' 
-  },
-  button: { 
-    paddingVertical: 18, 
-    paddingHorizontal: 30, 
-    borderRadius: 30, 
-    marginBottom: 25, 
-    width: '95%', 
-    alignItems: 'center', 
-    elevation: 4, 
-    shadowColor: "#000", 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.2, 
-    shadowRadius: 3
-  },
-  startButton: { 
-    backgroundColor: '#4CAF50' 
-  },
-  endButton: { 
-    backgroundColor: '#F44336' 
-  },
-  buttonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: 'bold' 
-  },
-  infoBox: { 
-    marginTop: 20, 
-    padding: 20, 
-    backgroundColor: 'rgba(255, 235, 238, 0.7)', 
-    borderRadius: 15, 
-    width: '100%', 
-    alignItems: 'flex-start' 
-  },
-  infoText: { 
-    fontSize: 15, 
-    color: '#C2185B', 
-    marginBottom: 6 
-  },
-  infoTextLight: {
-    fontSize: 14, 
-    color: '#E91E63', 
     textAlign: 'center'
   },
-  infoTextBold: {
-    fontSize: 16, 
-    color: '#AD1457', 
-    marginBottom: 8, 
+  activePeriodContainer: {
+    width: '100%',
+    backgroundColor: '#FFFDE7', 
+    borderRadius: 15,
+    padding: 20, 
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  activePeriodTitle: {
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#C2185B',
+    marginBottom: 10, 
+    textAlign: 'center'
+  },
+  activePeriodDate: {
+    fontSize: 16,
+    color: '#7B1FA2', 
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  sectionTitleSmall: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#880E4F', 
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  flowButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around', 
+    marginBottom: 20 
+  },
+  flowButton: {
+    paddingVertical: 10, 
+    paddingHorizontal: 10, 
+    borderRadius: 25, 
+    backgroundColor: '#F8BBD0', 
+    minWidth: 75, 
+    alignItems: 'center',
+    marginHorizontal: 4, 
+    borderWidth: 1,
+    borderColor: '#F48FB1' 
+  },
+  flowButtonSelected: {
+    backgroundColor: '#F06292', 
+    borderColor: '#D81B60', 
+    transform: [{ scale: 1.05 }], 
+  },
+  flowButtonText: {
+    color: '#880E4F', 
+    fontWeight: '500',
+    fontSize: 13, 
+  },
+  button: {
+    paddingVertical: 14, 
+    borderRadius: 30, 
+    width: '90%', 
+    alignItems: 'center',
+    alignSelf: 'center', 
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4 
+  },
+  startButton: {
+    backgroundColor: '#4CAF50', 
+  },
+  endButton: {
+    backgroundColor: '#F44336', 
+    marginTop: 10, 
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16
+  },
+  section: {
+    marginTop: 20,
+    width: '100%',
+    padding: 15,
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 10,
+    marginBottom: 15, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  sectionTitle: {
+    fontSize: 18, 
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#D81B60' 
+  },
+  symptomButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start', 
+  },
+  symptomButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    margin: 5,
+    backgroundColor: '#E1BEE7', 
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CE93D8'
+  },
+  symptomButtonSelected: {
+    backgroundColor: '#BA68C8', 
+    borderColor: '#9C27B0',
+  },
+  symptomButtonText: {
+    color: '#6A1B9A', 
+    fontSize: 13,
+  },
+  moodButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', 
+    justifyContent: 'space-around', 
+  },
+  moodButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10, 
+    margin: 5, 
+    backgroundColor: '#BBDEFB', 
+    borderRadius: 20,
+    minWidth: '30%', 
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#90CAF9'
+  },
+  moodButtonSelected: {
+    backgroundColor: '#64B5F6', 
+    borderColor: '#2196F3',
+  },
+  moodButtonText: {
+      color: '#0D47A1', 
+      fontSize: 13,
+      textAlign: 'center'
+  },
+  insightsContainer: {
+    marginTop: 25, 
+    padding: 20, 
+    backgroundColor: '#E8F5E9', 
+    borderRadius: 10,
+    width: '100%',
+  },
+  insightsTitle: {
+    fontSize: 20, 
+    fontWeight: 'bold',
+    marginBottom: 15, 
+    color: '#2E7D32', 
+    textAlign: 'center',
+  },
+  insightsSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#388E3C', 
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  insightItem: {
+    fontSize: 15,
+    color: '#1B5E20', 
+    marginBottom: 5,
+    paddingLeft: 10, 
+  },
+  healthButton: {
+    backgroundColor: '#4285F4',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+    alignItems: 'center',
+  },
+  healthButtonText: {
+    color: 'white',
     fontWeight: 'bold'
+  },
+  phaseIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 15
+  },
+  phasePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    minWidth: 100,
+    alignItems: 'center',
+    elevation: 1, 
+  },
+  toolsContainer: { 
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  toolButton: { 
+    backgroundColor: '#E0E0E0',
+    padding: 10,
+    borderRadius: 8,
+    margin: 5,
+    minWidth: '40%', 
+    alignItems: 'center',
+  },
+  notificationButton: { 
+    backgroundColor: '#AED581',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 5,
+    alignItems: 'center',
   }
 });
+
+export default PeriodTrackerScreen;

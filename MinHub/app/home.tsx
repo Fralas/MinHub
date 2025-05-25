@@ -1,142 +1,243 @@
-import { Link } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useTheme } from '../src/contexts/ThemeContext';
+
+const { width: screenWidth } = Dimensions.get('window');
+const USER_PROFILE_KEY = 'minhub_user_profile_data';
+
+interface UserProfile {
+  age: string;
+  accountName: string;
+  profession: string;
+  email: string;
+  hobbies: string[];
+  reasonForUse: string;
+  questionnaireCompletedOn: string;
+}
+
+interface AppFeature {
+  id: string;
+  name: string;
+  href: any;
+  relevance?: number;
+}
+
+const allAppFeatures: AppFeature[] = [
+  { id: 'todo', name: 'Todo List', href: '/App_inApp/ToDoList/toDoList' },
+  { id: 'notes', name: 'Notes', href: '/App_inApp/Notes/notes' },
+  { id: 'diary', name: 'Diary', href: '/App_inApp/Diary/diary' },
+  { id: 'periodTracker', name: 'Period Tracker', href: '/App_inApp/PeriodTracker/periodTracker' },
+  { id: 'studyPlanner', name: 'Study Planner', href: '/App_inApp/StudyPlanner/studyPlanner' },
+  { id: 'meditation', name: 'Meditation', href: '/App_inApp/Meditation/guided-meditations' },
+  { id: 'plantGrowth', name: 'Virtual Plant', href: '/App_inApp/PlantGrowth/plantGrowth' },
+  { id: 'calculator', name: 'Calculator', href: '/App_inApp/Calculator/calculator' },
+  { id: 'shoppingList', name: 'Shopping Lists', href: '/App_inApp/ShoppingList/shoppinglist' },
+  { id: 'reminders', name: 'Reminders', href: '/App_inApp/Reminders/reminders' },
+  { id: 'foodScheduler', name: 'Food', href: '/App_inApp/Food/foodScheduler' },
+  { id: 'drink', name: 'ReDrink', href: '/App_inApp/DrinkReminder/DrinkReminder' },
+  { id: 'calendar', name: 'Calendar', href: '/App_inApp/Calendar/calendar' },
+  { id: 'clock', name: 'Clock', href: '/App_inApp/Clock/clock' },
+  { id: 'workout', name: 'Workout', href: '/App_inApp/Workout/workout' },
+  { id: 'countdown', name: 'Countdown', href: '/App_inApp/Countdown/countdown' },
+  { id: 'sleepHelper', name: 'Sleep Helper', href: '/App_inApp/SleepHelper/sleep-helper' },
+  { id: 'earTraining', name: 'EarTraining', href: '/App_inApp/EarTraining/earTraining' },
+  { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro' },
+  
+];
+
+function useUserProfile() {
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const loadUserProfile = async () => {
+        setIsLoadingProfile(true);
+        try {
+          const profileDataString = await AsyncStorage.getItem(USER_PROFILE_KEY);
+          if (isActive && profileDataString) {
+            setUserProfile(JSON.parse(profileDataString));
+          } else if (isActive) {
+            setUserProfile(null);
+          }
+        } catch (error) {
+          if (isActive) setUserProfile(null);
+          console.error('Failed to load user profile data on focus:', error);
+        } finally {
+          if (isActive) setIsLoadingProfile(false);
+        }
+      };
+
+      loadUserProfile();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
+  return { userProfile, isLoadingProfile };
+}
 
 export default function HomeScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>MinHub Home</Text>
-      <View style={styles.iconContainer}>
-        <Link href="/App_inApp/ToDoList/toDoList" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Todo List</Text>
-          </TouchableOpacity>
-        </Link>
+  const { theme, isDark } = useTheme();
+  const { userProfile, isLoadingProfile } = useUserProfile();
+  const router = useRouter();
+  const personalizedFeatures = useMemo(() => {
+    if (!userProfile) {
+      return allAppFeatures;
+    }
+    return [...allAppFeatures]
+      .map(feature => {
+        let relevance = 0;
+        if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
+          relevance = 10;
+        }
+        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink')) {
+          relevance = 10;
+        }
+        if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {
+          relevance = 10;
+        }
+        if (userProfile.hobbies.includes('🍳 Cooking') && (feature.id === 'foodScheduler' || feature.id === 'shoppingList')) {
+            relevance = 8;
+        }
+        return { ...feature, relevance };
+      })
+      .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
+  }, [userProfile]);
 
-        <Link href="/App_inApp/Notes/notes" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Notes</Text>
-          </TouchableOpacity>
-        </Link>
+  const styles = createThemedStyles(theme, isDark);
 
-        <Link href="/App_inApp/Diary/diary" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Diary</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/PeriodTracker/periodTracker" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Period Tracker</Text>
-            </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Meditation/guided-meditations" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Meditation</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/PlantGrowth/plantGrowth" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Virtual Plant</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Calculator/calculator" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Calculator</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/ShoppingList/shoppinglist" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Shopping Lists</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Reminders/reminders" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Reminders</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Food/foodScheduler" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Food</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Calendar/calendar" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Calendar</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Clock/clock" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Clock</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <Link href="/App_inApp/Workout/workout" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Workout</Text>
-          </TouchableOpacity>
-        </Link>
-
-
-        <Link href="/App_inApp/Pomodoro/pomodoro" asChild>
-          <TouchableOpacity style={styles.iconButton}>
-            <Text style={styles.iconText}>Pomostudy</Text>
-          </TouchableOpacity>
-        </Link>
+  if (isLoadingProfile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
-    </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeAreaContainer}>
+      <View style={styles.headerContainer}>
+        <View style={styles.titlePlaceholder} />
+        <Text style={styles.title}>
+          {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
+        </Text>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
+           <Ionicons name="settings-outline" size={26} color={theme.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {userProfile?.profession === '🧑‍🎓 Student' && (
+        <Text style={styles.suggestionText}>Student mode: Study tools are prioritized!</Text>
+      )}
+
+      <ScrollView contentContainerStyle={styles.iconContainer}>
+        {personalizedFeatures.map((feature) => (
+          <Link href={feature.href} asChild key={feature.id}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Text style={styles.iconText}>{feature.name}</Text>
+            </TouchableOpacity>
+          </Link>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f0f4f8',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 50,
-    color: '#2c3e50',
-  },
-  iconContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '95%',
-    flexWrap: 'wrap',
-  },
-  iconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 20,
-    borderWidth: 1,
-    borderColor: '#d0dae0',
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    minWidth: 120,
-    height: 100,
-    margin: 10,
-    elevation: 3,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  iconText: {
-    fontSize: 15,
-    color: '#34495e',
-    textAlign: 'center',
-  },
-});
+const createThemedStyles = (theme: import('../src/styles/themes').Theme, isDark: boolean) => {
+  const numColumns = 2;
+  const horizontalPaddingTotalForIconContainer = 20; 
+  const gapBetweenItems = 15;
+  const itemWidth = (screenWidth - horizontalPaddingTotalForIconContainer - (gapBetweenItems * (numColumns - 1))) / numColumns;
+
+  return StyleSheet.create({
+    safeAreaContainer: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 15, 
+      paddingTop: Platform.OS === 'android' ? 35 : 25,
+      paddingBottom: 15,
+      width: '100%',
+    },
+    titlePlaceholder: { 
+      width: 26 + 15, 
+    },
+    settingsButton: {
+      padding: 8,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.background,
+    },
+    title: {
+      flex: 1, 
+      fontSize: 22, 
+      fontWeight: 'bold',
+      color: theme.text,
+      textAlign: 'center',
+      marginHorizontal: 5, 
+    },
+    suggestionText: {
+      fontSize: 16,
+      color: theme.primary,
+      marginTop: 10,
+      marginBottom: 20,
+      textAlign: 'center',
+      paddingHorizontal: 20,
+    },
+    iconContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      paddingHorizontal: horizontalPaddingTotalForIconContainer / 2,
+      paddingBottom: 30,
+      width: '100%',
+    },
+    iconButton: {
+      width: itemWidth,
+      height: itemWidth,
+      backgroundColor: theme.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: gapBetweenItems,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: theme.border,
+      elevation: 2,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.25 : 0.1,
+      shadowRadius: 3,
+      padding: 8,
+    },
+    iconText: {
+      fontSize: 14,
+      color: theme.text,
+      textAlign: 'center',
+      fontWeight: '500',
+    },
+  });
+};

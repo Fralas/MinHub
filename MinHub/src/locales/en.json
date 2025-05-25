@@ -1,0 +1,39 @@
+{
+  "settings": {
+    "title": "Settings",
+    "account": "Account",
+    "editProfile": "Edit Profile",
+    "notifications": "Notifications",
+    "appearance": "Appearance",
+    "darkMode": "Dark Mode",
+    "language": "Language",
+    "testing": "Testing",
+    "sendTestNotification": "Send Test Notification Now",
+    "logout": "Logout"
+  },
+  "home": {
+    "welcome": "Welcome, {{name}}!",
+    "defaultTitle": "MinHub Home",
+    "studentMode": "Student mode: Study tools are prioritized!"
+  },
+  "languages": {
+    "english": "English",
+    "italian": "Italiano",
+    "select": "Select Language"
+  },
+  "editProfile": {
+    "title": "Edit Profile",
+    "save": "Save"
+  },
+  "notificationSettings": {
+      "title": "Notification Preferences",
+      "enableAll": "Enable All Notifications",
+      "enableAllDescription": "Toggle this to enable or disable all notifications from MinHub.",
+      "specificReminders": "Specific Reminders",
+      "todoReminders": "To-Do Task Reminders",
+      "calendarAlerts": "Calendar Event Alerts",
+      "wellBeingFeatures": "Well-being Features",
+      "pomodoroAlerts": "Pomodoro Timer Sounds/Alerts",
+      "meditationReminders": "Meditation Reminders"
+  }
+}
