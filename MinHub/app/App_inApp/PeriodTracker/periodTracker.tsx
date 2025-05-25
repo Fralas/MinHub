@@ -70,39 +70,24 @@ const calculateAverage = (values: number[]): number => {
 
 const getAverageCycleLength = (periods: PeriodData[]): number => {
   if (periods.length < 2) return 28;
-  
   const cycleLengths: number[] = [];
   const sortedPeriods = [...periods].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-
   for (let i = 0; i < sortedPeriods.length - 1; i++) {
-    const currentPeriod = sortedPeriods[i];
-    const nextPeriod = sortedPeriods[i+1];
-    
-    const startDateCurrent = new Date(currentPeriod.startDate);
-    const startDateNext = new Date(nextPeriod.startDate);
-    const diffTime = startDateNext.getTime() - startDateCurrent.getTime();
+    const diffTime = new Date(sortedPeriods[i+1].startDate).getTime() - new Date(sortedPeriods[i].startDate).getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays > 0 && diffDays < 100) { 
-        cycleLengths.push(diffDays);
-    }
+    if (diffDays > 0 && diffDays < 100) cycleLengths.push(diffDays);
   }
-  
   return calculateAverage(cycleLengths) || 28;
 };
 
 const getAveragePeriodLength = (periods: PeriodData[]): number => {
   const periodLengths: number[] = [];
-  
   periods.forEach(period => {
     if (period.endDate) {
-      const start = new Date(period.startDate);
-      const end = new Date(period.endDate);
-      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      periodLengths.push(diffDays);
+      const diffDays = Math.round((new Date(period.endDate).getTime() - new Date(period.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffDays > 0 && diffDays < 20) periodLengths.push(diffDays);
     }
   });
-  
   return calculateAverage(periodLengths) || 5;
 };
 
@@ -110,10 +95,7 @@ const calculateFertilityWindow = (cycleLength: number): FertilityData => {
   const ovulationDay = cycleLength > 14 ? cycleLength - 14 : Math.round(cycleLength / 2);
   return {
     ovulationDay,
-    fertileWindow: {
-      start: Math.max(1, ovulationDay - 5), 
-      end: Math.min(cycleLength > 0 ? cycleLength : 35, ovulationDay + 1) 
-    }
+    fertileWindow: { start: Math.max(1, ovulationDay - 5), end: Math.min(cycleLength > 0 ? cycleLength : 35, ovulationDay + 1) }
   };
 };
 
@@ -125,38 +107,23 @@ const loadPeriods = async (): Promise<PeriodData[]> => {
   try {
     const jsonValue = await AsyncStorage.getItem(PERIODS_KEY);
     return jsonValue ? JSON.parse(jsonValue) : [];
-  } catch (e) {
-    console.error('Failed to load periods', e);
-    return [];
-  }
+  } catch (e) { return []; }
 };
 
 const savePeriods = async (periods: PeriodData[]): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(PERIODS_KEY, JSON.stringify(periods));
-  } catch (e) {
-    console.error('Failed to save periods', e);
-  }
+  try { await AsyncStorage.setItem(PERIODS_KEY, JSON.stringify(periods)); } catch (e) {}
 };
 
 const loadSettings = async (): Promise<CycleSettings> => {
   try {
     const jsonValue = await AsyncStorage.getItem(SETTINGS_KEY);
     return jsonValue ? JSON.parse(jsonValue) : { averageCycleLength: 28, averagePeriodLength: 5 };
-  } catch (e) {
-    console.error('Failed to load settings', e);
-    return { averageCycleLength: 28, averagePeriodLength: 5 };
-  }
+  } catch (e) { return { averageCycleLength: 28, averagePeriodLength: 5 }; }
 };
 
 const saveSettings = async (settings: CycleSettings): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.error('Failed to save settings', e);
-  }
+  try { await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
 };
-
 
 const PeriodTrackerScreen = () => {
   const [periods, setPeriods] = useState<PeriodData[]>([]);
@@ -164,7 +131,6 @@ const PeriodTrackerScreen = () => {
   const [currentActivePeriod, setCurrentActivePeriod] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [medications, setMedications] = useState<Medication[]>([]);
-
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [datePickerTarget, setDatePickerTarget] = useState<'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate' | null>(null);
@@ -173,170 +139,112 @@ const PeriodTrackerScreen = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedPeriods, loadedSettingsFromStorage, loadedMedsString] = await Promise.all([ 
-        loadPeriods(),
-        loadSettings(),
-        AsyncStorage.getItem(MEDICATIONS_KEY)
+      const [loadedPeriods, loadedSettingsFromStorage, loadedMedsString] = await Promise.all([
+        loadPeriods(), loadSettings(), AsyncStorage.getItem(MEDICATIONS_KEY)
       ]);
-      
-      const sortedPeriods = [...loadedPeriods].sort((a, b) => 
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-      );
-      
+      const sortedPeriods = [...loadedPeriods].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
       const newAvgCycle = getAverageCycleLength(sortedPeriods);
       const newAvgPeriod = getAveragePeriodLength(sortedPeriods);
-
       const finalSettings = {
         averageCycleLength: newAvgCycle || loadedSettingsFromStorage.averageCycleLength,
         averagePeriodLength: newAvgPeriod || loadedSettingsFromStorage.averagePeriodLength
       };
-      
       await saveSettings(finalSettings);
       setSettings(finalSettings);
       setPeriods(sortedPeriods);
       setCurrentActivePeriod(sortedPeriods.find(p => p.endDate === null) || null);
-      if (loadedMedsString) {
-        setMedications(JSON.parse(loadedMedsString));
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to load cycle data");
-    } finally {
-      setIsLoading(false);
-    }
+      if (loadedMedsString) setMedications(JSON.parse(loadedMedsString));
+    } catch (error) { Alert.alert("Error", "Failed to load cycle data"); }
+    finally { setIsLoading(false); }
   }, []);
 
-
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-      
-      const fetchDataWrapper = async () => {
-        try {
-          await fetchData();
-        } catch (error) {
-          if (isActive) {
-            Alert.alert("Error", "Failed to load data");
-          }
-        }
-      };
-
-      fetchDataWrapper();
-
-      return () => {
-        isActive = false;
-      };
-    }, [fetchData])
-  );
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
   const showDatePicker = (mode: 'startPeriod' | 'endPeriod' | 'editStartDate' | 'editEndDate', periodId?: string) => {
     setDatePickerTarget(mode);
     if (periodId) setEditingPeriodId(periodId);
-    
-    if (mode === 'editStartDate' && periodId) {
+    let dateToSet = new Date();
+    if ((mode === 'editStartDate' || mode === 'editEndDate') && periodId) {
         const periodToEdit = periods.find(p => p.id === periodId);
-        if (periodToEdit) setSelectedDate(new Date(periodToEdit.startDate));
-        else setSelectedDate(new Date());
-    } else if (mode === 'editEndDate' && periodId) {
-        const periodToEdit = periods.find(p => p.id === periodId);
-        if (periodToEdit && periodToEdit.endDate) setSelectedDate(new Date(periodToEdit.endDate));
-        else setSelectedDate(new Date());
-    } else {
-        setSelectedDate(new Date());
+        if (periodToEdit) {
+            dateToSet = new Date((mode === 'editStartDate' ? periodToEdit.startDate : periodToEdit.endDate || new Date()) + "T00:00:00");
+        }
     }
+    setSelectedDate(dateToSet);
     setDatePickerVisible(true);
   };
 
   const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
-    setDatePickerVisible(false); 
+    const isIOS = Platform.OS === 'ios';
+    if(!isIOS) setDatePickerVisible(false);
     if (event.type === 'dismissed' || !date || !datePickerTarget) {
-      return;
+        if(isIOS && event.type !== 'neutralButtonPressed') setDatePickerVisible(false);
+        return;
     }
-    
+    if(isIOS) {
+        setSelectedDate(date); // For iOS, user confirms via "Done" button
+    } else {
+        await applySelectedDate(date); // For Android, apply directly
+    }
+  };
+
+  const applySelectedDateFromIOSPicker = async () => {
+    setDatePickerVisible(false);
+    await applySelectedDate(selectedDate);
+  };
+
+  const applySelectedDate = async (date: Date) => {
     const dateStr = formatDateToYYYYMMDD(date);
     let updatedPeriodsList = [...periods];
+    let requiresRecalculation = false;
 
-    try {
-      switch (datePickerTarget) {
-        case 'startPeriod':
-          if (periods.some(p => p.endDate === null)) {
-            Alert.alert("Active Period", "An active period already exists. Please end it before starting a new one.");
-            return;
-          }
-          if (periods.some(p => p.startDate === dateStr)) {
-            Alert.alert("Duplicate", "A period starting on this date already exists.");
-            return;
-          }
-          const newPeriod: PeriodData = {
-            id: Date.now().toString(),
-            startDate: dateStr,
-            endDate: null,
-            dailyLogs: []
-          };
-          updatedPeriodsList = [newPeriod, ...periods].sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-          setCurrentActivePeriod(newPeriod);
-          break;
-
-        case 'endPeriod':
-          if (currentActivePeriod) {
-            if (new Date(dateStr) < new Date(currentActivePeriod.startDate)) {
-                Alert.alert("Invalid Date", "End date cannot be before start date.");
-                return;
-            }
-            updatedPeriodsList = periods.map(p => 
-              p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p
-            );
-            setCurrentActivePeriod(null);
-          }
-          break;
-
-        case 'editStartDate':
-          updatedPeriodsList = periods.map(p => {
-            if (p.id === editingPeriodId) {
-                if (p.endDate && new Date(dateStr) > new Date(p.endDate)) {
-                    Alert.alert("Invalid Date", "Start date cannot be after end date.");
-                    return p; 
-                }
-                return { ...p, startDate: dateStr };
-            }
-            return p;
-          });
-          updatedPeriodsList.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-          break;
-
-        case 'editEndDate':
-          updatedPeriodsList = periods.map(p => {
-            if (p.id === editingPeriodId) {
-                if (new Date(dateStr) < new Date(p.startDate)) {
-                    Alert.alert("Invalid Date", "End date cannot be before start date.");
-                    return p; 
-                }
-                return { ...p, endDate: dateStr };
-            }
-            return p;
-          });
-          break;
-      }
-
-      setPeriods(updatedPeriodsList);
-      await savePeriods(updatedPeriodsList);
-      
+    switch (datePickerTarget) {
+      case 'startPeriod':
+        if (periods.some(p => p.endDate === null)) { Alert.alert("Active Period", "An active period already exists. Please end it first."); return; }
+        if (periods.some(p => p.startDate === dateStr)) { Alert.alert("Duplicate", "A period starting on this date already exists."); return; }
+        const newPeriod: PeriodData = { id: Date.now().toString(), startDate: dateStr, endDate: null, dailyLogs: [] };
+        updatedPeriodsList = [newPeriod, ...periods];
+        setCurrentActivePeriod(newPeriod);
+        requiresRecalculation = true;
+        break;
+      case 'endPeriod':
+        if (currentActivePeriod) {
+          if (new Date(dateStr) < new Date(currentActivePeriod.startDate)) { Alert.alert("Invalid Date", "End date cannot be before start date."); return; }
+          updatedPeriodsList = periods.map(p => p.id === currentActivePeriod.id ? { ...p, endDate: dateStr } : p);
+          setCurrentActivePeriod(null);
+          requiresRecalculation = true;
+        }
+        break;
+      case 'editStartDate':
+        updatedPeriodsList = periods.map(p => {
+          if (p.id === editingPeriodId) {
+            if (p.endDate && new Date(dateStr) > new Date(p.endDate)) { Alert.alert("Invalid Date", "Start date cannot be after end date."); return p; }
+            requiresRecalculation = true; return { ...p, startDate: dateStr };
+          } return p;
+        });
+        break;
+      case 'editEndDate':
+        updatedPeriodsList = periods.map(p => {
+          if (p.id === editingPeriodId) {
+            if (new Date(dateStr) < new Date(p.startDate)) { Alert.alert("Invalid Date", "End date cannot be before start date."); return p; }
+            requiresRecalculation = true; return { ...p, endDate: dateStr };
+          } return p;
+        });
+        break;
+    }
+    updatedPeriodsList.sort((a,b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    setPeriods(updatedPeriodsList);
+    await savePeriods(updatedPeriodsList);
+    if (requiresRecalculation) {
       const newAvgCycle = getAverageCycleLength(updatedPeriodsList);
       const newAvgPeriod = getAveragePeriodLength(updatedPeriodsList);
-      const newSettings = {
-        averageCycleLength: newAvgCycle,
-        averagePeriodLength: newAvgPeriod
-      };
-      
+      const newSettings = { averageCycleLength: newAvgCycle, averagePeriodLength: newAvgPeriod };
       await saveSettings(newSettings);
       setSettings(newSettings);
-      setCurrentActivePeriod(updatedPeriodsList.find(p => p.endDate === null) || null);
-
-    } catch (error) {
-      Alert.alert("Error", "Failed to save changes");
-    } finally {
-      setEditingPeriodId(null);
-      setDatePickerTarget(null);
     }
+    setCurrentActivePeriod(updatedPeriodsList.find(p => p.endDate === null) || null);
+    setEditingPeriodId(null);
+    setDatePickerTarget(null);
   };
 
   const logFlow = async (flow: FlowIntensity) => {

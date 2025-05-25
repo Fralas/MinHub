@@ -522,9 +522,6 @@ export default function StudyPlatformScreen() {
         <Text style={dynamicStyles.headerTitle}>Study Planner</Text>
 
         <View style={styles.sectionContainer}>
-            <TouchableOpacity onPress={syncWithCloud} style={styles.utilityButton}>
-                <Text style={styles.utilityButtonText}>Sync with Cloud</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={exportToPDF} style={styles.utilityButton}>
                 <Text style={styles.utilityButtonText}>Export to PDF</Text>
             </TouchableOpacity>
