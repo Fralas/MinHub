@@ -5,19 +5,19 @@ import { useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    Button,
-    FlatList,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Button,
+  FlatList,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 type EventPriority = 'High' | 'Medium' | 'Low';
@@ -444,23 +444,23 @@ export default function StudyPlatformScreen() {
   const dynamicStyles = StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: appTheme === 'light' ? '#F0F4F8' : '#2c3e50',
+      backgroundColor: appTheme === 'light' ? '#F0F4F8' : '#1A202C',
     },
     headerTitle: {
         fontSize: 26,
         fontWeight: 'bold',
-        color: appTheme === 'light' ? '#2c3e50' : '#ECF0F1',
+        color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0',
         textAlign: 'center',
         marginBottom: 20,
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: '600',
-        color: appTheme === 'light' ? '#34495e' : '#BDC3C7',
+        color: appTheme === 'light' ? '#34495e' : '#A0AEC0',
     },
     emptyText: {
         textAlign: 'center',
-        color: appTheme === 'light' ? '#7F8C8D' : '#95A5A6',
+        color: appTheme === 'light' ? '#7F8C8D' : '#718096',
         marginTop: 15,
         marginBottom: 10,
         fontSize: 15,
@@ -468,23 +468,23 @@ export default function StudyPlatformScreen() {
     listItemText: {
         fontSize: 16,
         fontWeight: '500',
-        color: appTheme === 'light' ? '#2C3E50' : '#ECF0F1',
+        color: appTheme === 'light' ? '#2C3E50' : '#E2E8F0',
         flexShrink: 1, 
     },
     noteContentPreview: {
         fontSize: 13,
-        color: appTheme === 'light' ? '#7F8C8D' : '#BDC3C7',
+        color: appTheme === 'light' ? '#7F8C8D' : '#A0AEC0',
         marginTop: 4,
     },
     eventDate: {
         fontSize: 13,
-        color: appTheme === 'light' ? '#7F8C8D' : '#BDC3C7',
+        color: appTheme === 'light' ? '#7F8C8D' : '#A0AEC0',
         marginTop: 2,
     },
     filterLabel: {
         marginRight: 8,
         fontSize: 15,
-        color: appTheme === 'light' ? '#34495e' : '#BDC3C7',
+        color: appTheme === 'light' ? '#34495e' : '#A0AEC0',
         marginBottom: 8, 
         alignSelf: 'center',
     },
@@ -498,48 +498,47 @@ export default function StudyPlatformScreen() {
     themeSwitchLabel: {
         marginRight: 10,
         fontSize: 16,
-        color: appTheme === 'light' ? '#2c3e50' : '#ECF0F1',
+        color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0',
     }
   });
 
-
   if (isLoading) {
-    return <View style={styles.centered}><Text style={{color: appTheme === 'light' ? '#2c3e50' : '#ECF0F1'}}>Caricamento...</Text></View>;
+    return <View style={[styles.centered, {backgroundColor: appTheme === 'light' ? '#F0F4F8' : '#1A202C'}]}><Text style={{color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}}>Loading study planner...</Text></View>;
   }
 
   return (
     <SafeAreaView style={dynamicStyles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={dynamicStyles.themeSwitchContainer}>
-            <Text style={dynamicStyles.themeSwitchLabel}>Tema Scuro</Text>
+            <Text style={dynamicStyles.themeSwitchLabel}>Dark Mode</Text>
             <Switch
-                trackColor={{ false: "#767577", true: "#81b0ff" }}
+                trackColor={{ false: "#767577", true: appTheme === 'light' ? "#3498DB" : "#81b0ff" }}
                 thumbColor={appTheme === 'dark' ? "#f5dd4b" : "#f4f3f4"}
                 ios_backgroundColor="#3e3e3e"
                 onValueChange={toggleTheme}
                 value={appTheme === 'dark'}
             />
         </View>
-        <Text style={dynamicStyles.headerTitle}>Piattaforma Studio</Text>
+        <Text style={dynamicStyles.headerTitle}>Study Planner</Text>
 
         <View style={styles.sectionContainer}>
             <TouchableOpacity onPress={syncWithCloud} style={styles.utilityButton}>
-                <Text style={styles.utilityButtonText}>Sincronizza Cloud</Text>
+                <Text style={styles.utilityButtonText}>Sync with Cloud</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={exportToPDF} style={styles.utilityButton}>
-                <Text style={styles.utilityButtonText}>Esporta in PDF</Text>
+                <Text style={styles.utilityButtonText}>Export to PDF</Text>
             </TouchableOpacity>
         </View>
 
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={dynamicStyles.sectionTitle}>I Miei Corsi</Text>
+            <Text style={dynamicStyles.sectionTitle}>My Courses</Text>
             <TouchableOpacity style={styles.addButton} onPress={() => openCourseModal()}>
-              <Text style={styles.addButtonText}>+ Corso</Text>
+              <Text style={styles.addButtonText}>+ Course</Text>
             </TouchableOpacity>
           </View>
           {courses.length === 0 ? (
-            <Text style={dynamicStyles.emptyText}>Nessun corso aggiunto.</Text>
+            <Text style={dynamicStyles.emptyText}>No courses added yet.</Text>
           ) : (
             <FlatList
               data={courses}
@@ -551,10 +550,10 @@ export default function StudyPlatformScreen() {
                     </View>
                   <View style={styles.listItemActions}>
                     <TouchableOpacity onPress={() => openCourseModal(item)} style={styles.actionButton}>
-                      <Text style={styles.actionButtonText}>Modifica</Text>
+                      <Text style={styles.actionButtonText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteCourse(item.id)} style={styles.actionButton}>
-                      <Text style={[styles.actionButtonText, styles.deleteText]}>Elimina</Text>
+                      <Text style={[styles.actionButtonText, styles.deleteText]}>Delete</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -566,38 +565,40 @@ export default function StudyPlatformScreen() {
 
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={dynamicStyles.sectionTitle}>Appunti</Text>
+            <Text style={dynamicStyles.sectionTitle}>Notes</Text>
             <TouchableOpacity 
                 style={[styles.addButton, courses.length === 0 && styles.disabledButton]} 
                 onPress={() => openNoteModal(undefined, selectedCourseIdForNotes || (courses.length > 0 ? courses[0].id : undefined) )}
                 disabled={courses.length === 0}
             >
-              <Text style={styles.addButtonText}>+ Nota</Text>
+              <Text style={styles.addButtonText}>+ Note</Text>
             </TouchableOpacity>
           </View>
           {courses.length > 0 && (
             <View style={styles.filterContainer}>
-              <Text style={dynamicStyles.filterLabel}>Filtra per corso:</Text>
-              <TouchableOpacity onPress={() => setSelectedCourseIdForNotes(null)} style={[styles.courseFilterButton, !selectedCourseIdForNotes && styles.courseFilterButtonActive]}>
-                  <Text style={styles.courseFilterButtonText}>Tutti</Text>
-              </TouchableOpacity>
-              {courses.map(course => (
-                <TouchableOpacity
-                  key={course.id}
-                  style={[
-                    styles.courseFilterButton,
-                    selectedCourseIdForNotes === course.id && styles.courseFilterButtonActive,
-                  ]}
-                  onPress={() => setSelectedCourseIdForNotes(course.id)}>
-                  <Text style={styles.courseFilterButtonText}>{course.name}</Text>
+              <Text style={dynamicStyles.filterLabel}>Filter by course:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollView}>
+                <TouchableOpacity onPress={() => setSelectedCourseIdForNotes(null)} style={[styles.courseFilterButton, !selectedCourseIdForNotes && styles.courseFilterButtonActive]}>
+                    <Text style={[styles.courseFilterButtonText, !selectedCourseIdForNotes && styles.courseFilterButtonTextActive]}>All</Text>
                 </TouchableOpacity>
-              ))}
+                {courses.map(course => (
+                    <TouchableOpacity
+                    key={course.id}
+                    style={[
+                        styles.courseFilterButton,
+                        selectedCourseIdForNotes === course.id && styles.courseFilterButtonActive,
+                    ]}
+                    onPress={() => setSelectedCourseIdForNotes(course.id)}>
+                    <Text style={[styles.courseFilterButtonText, selectedCourseIdForNotes === course.id && styles.courseFilterButtonTextActive]}>{course.name}</Text>
+                    </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
           {filteredNotes.length === 0 ? (
              <Text style={dynamicStyles.emptyText}>
-                {courses.length === 0 ? "Aggiungi prima un corso." : 
-                 selectedCourseIdForNotes ? "Nessun appunto per questo corso." : "Nessun appunto."}
+                {courses.length === 0 ? "Add a course first to create notes." : 
+                 selectedCourseIdForNotes ? "No notes for this course." : "No notes yet."}
             </Text>
           ) : (
             <FlatList
@@ -607,19 +608,19 @@ export default function StudyPlatformScreen() {
                 <View style={[styles.listItem, item.completed && styles.completedNote]}>
                   <View style={styles.noteInfoContainer}>
                     <Text style={dynamicStyles.listItemText}>{item.title}</Text>
-                    <Text style={dynamicStyles.noteContentPreview}>
-                        {item.content.substring(0,50)}{item.content.length > 50 ? "..." : ""}
+                    <Text style={dynamicStyles.noteContentPreview} numberOfLines={2}>
+                        {item.content}
                     </Text>
                     <Text style={styles.noteCourseName}>
-                        Corso: {courses.find(c=>c.id === item.courseId)?.name || "N/D"}
+                        Course: {courses.find(c=>c.id === item.courseId)?.name || "N/A"}
                     </Text>
                   </View>
                   <View style={styles.listItemActions}>
                     <TouchableOpacity onPress={() => openNoteModal(item)} style={styles.actionButton}>
-                       <Text style={styles.actionButtonText}>Vedi/Mod</Text>
+                       <Text style={styles.actionButtonText}>View/Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteNote(item.id)} style={styles.actionButton}>
-                       <Text style={[styles.actionButtonText, styles.deleteText]}>Elimina</Text>
+                       <Text style={[styles.actionButtonText, styles.deleteText]}>Delete</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -631,13 +632,13 @@ export default function StudyPlatformScreen() {
 
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={dynamicStyles.sectionTitle}>Scadenze ed Eventi</Text>
+            <Text style={dynamicStyles.sectionTitle}>Deadlines & Events</Text>
             <TouchableOpacity style={styles.addButton} onPress={() => openEventModal()}>
-              <Text style={styles.addButtonText}>+ Evento</Text>
+              <Text style={styles.addButtonText}>+ Event</Text>
             </TouchableOpacity>
           </View>
           {studyEvents.length === 0 ? (
-            <Text style={dynamicStyles.emptyText}>Nessuna scadenza o evento.</Text>
+            <Text style={dynamicStyles.emptyText}>No deadlines or events scheduled.</Text>
           ) : (
             <FlatList
               data={studyEvents}
@@ -646,17 +647,17 @@ export default function StudyPlatformScreen() {
                 <View style={[styles.listItem, getPriorityStyle(item.priority)]}>
                     <View style={styles.eventInfoContainer}>
                         <Text style={dynamicStyles.listItemText}>{item.title}</Text>
-                        <Text style={dynamicStyles.eventDate}>{new Date(item.date  + "T00:00:00").toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
-                        {item.courseId && <Text style={styles.noteCourseName}>Corso: {courses.find(c=>c.id === item.courseId)?.name || "N/D"}</Text>}
+                        <Text style={dynamicStyles.eventDate}>{new Date(item.date  + "T00:00:00").toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+                        {item.courseId && <Text style={styles.noteCourseName}>Course: {courses.find(c=>c.id === item.courseId)?.name || "N/A"}</Text>}
                         {item.priority && <Text style={[styles.priorityTextPill, getPriorityStyle(item.priority)]}>{item.priority}</Text>}
-                        {item.description && <Text style={dynamicStyles.noteContentPreview}>{item.description}</Text>}
+                        {item.description && <Text style={dynamicStyles.noteContentPreview} numberOfLines={2}>{item.description}</Text>}
                     </View>
                   <View style={styles.listItemActions}>
                   <TouchableOpacity onPress={() => openEventModal(item)} style={styles.actionButton}>
-                       <Text style={styles.actionButtonText}>Modifica</Text>
+                       <Text style={styles.actionButtonText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteEvent(item.id)} style={styles.actionButton}>
-                       <Text style={[styles.actionButtonText, styles.deleteText]}>Elimina</Text>
+                       <Text style={[styles.actionButtonText, styles.deleteText]}>Delete</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -672,18 +673,18 @@ export default function StudyPlatformScreen() {
           visible={isCourseModalVisible}
           onRequestClose={closeCourseModal}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{editingCourse ? 'Modifica Corso' : 'Nuovo Corso'}</Text>
+            <View style={[styles.modalContent, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#2D3748'}]}>
+              <Text style={[styles.modalTitle, {color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}>{editingCourse ? 'Edit Course' : 'New Course'}</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Nome del corso"
+                style={[styles.input, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#4A5568', color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}
+                placeholder="Course name"
                 value={currentCourseName}
                 onChangeText={setCurrentCourseName}
-                placeholderTextColor={appTheme === 'dark' ? '#95A5A6' : '#BDC3C7'}
+                placeholderTextColor={appTheme === 'light' ? '#a0aec0' : '#718096'}
               />
               <View style={styles.modalActions}>
-                <Button title="Annulla" onPress={closeCourseModal} color="#FF6347" />
-                <Button title={editingCourse ? 'Salva Modifiche' : 'Aggiungi Corso'} onPress={handleSaveCourse} />
+                <Button title="Cancel" onPress={closeCourseModal} color="#FF6347" />
+                <Button title={editingCourse ? 'Save Changes' : 'Add Course'} onPress={handleSaveCourse} />
               </View>
             </View>
           </View>
@@ -695,50 +696,50 @@ export default function StudyPlatformScreen() {
           visible={isNoteModalVisible}
           onRequestClose={closeNoteModal}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{editingNote ? 'Modifica Nota' : 'Nuova Nota'}</Text>
+            <View style={[styles.modalContent, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#2D3748'}]}>
+              <Text style={[styles.modalTitle, {color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}>{editingNote ? 'Edit Note' : 'New Note'}</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Titolo della nota"
+                style={[styles.input, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#4A5568', color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}
+                placeholder="Note title"
                 value={currentNoteTitle}
                 onChangeText={setCurrentNoteTitle}
-                placeholderTextColor={appTheme === 'dark' ? '#95A5A6' : '#BDC3C7'}
+                placeholderTextColor={appTheme === 'light' ? '#a0aec0' : '#718096'}
               />
                <ScrollView style={styles.pickerContainerScrollView} horizontal={true} showsHorizontalScrollIndicator={false}>
-                <Text style={dynamicStyles.filterLabel}>Corso:</Text>
+                <Text style={dynamicStyles.filterLabel}>Course:</Text>
                 {courses.length > 0 ? (
                     courses.map(course => (
                         <TouchableOpacity 
                             key={course.id} 
-                            style={[styles.coursePickerButton, noteSelectedCourseId === course.id && styles.coursePickerButtonSelected]}
+                            style={[styles.coursePickerButton, {backgroundColor: appTheme === 'light' ? (noteSelectedCourseId === course.id ? '#3498DB' : '#ECF0F1') : (noteSelectedCourseId === course.id ? '#3498DB' : '#4A5568') } ]}
                             onPress={() => setNoteSelectedCourseId(course.id)}
                         >
-                            <Text style={styles.coursePickerButtonText}>{course.name}</Text>
+                            <Text style={[styles.coursePickerButtonText, {color: appTheme === 'light' ? '#2C3E50' : (noteSelectedCourseId === course.id ? '#FFFFFF' : '#A0AEC0')}]}>{course.name}</Text>
                         </TouchableOpacity>
                     ))
-                ) : <Text style={styles.emptyPickerText}> Nessun corso. Creane uno.</Text>}
+                ) : <Text style={[styles.emptyPickerText, {color: appTheme === 'light' ? '#7F8C8D' : '#A0AEC0'}]}> No courses. Create one.</Text>}
                </ScrollView>
               <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Contenuto della nota..."
+                style={[styles.input, styles.textArea, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#4A5568', color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}
+                placeholder="Note content..."
                 value={currentNoteContent}
                 onChangeText={setCurrentNoteContent}
                 multiline
                 numberOfLines={4}
-                placeholderTextColor={appTheme === 'dark' ? '#95A5A6' : '#BDC3C7'}
+                placeholderTextColor={appTheme === 'light' ? '#a0aec0' : '#718096'}
               />
               <View style={styles.completedToggleContainer}>
-                  <Text style={dynamicStyles.filterLabel}>Completata:</Text>
+                  <Text style={dynamicStyles.filterLabel}>Completed:</Text>
                   <TouchableOpacity 
                     style={[styles.toggleButton, currentNoteCompleted && styles.toggleButtonActive]}
                     onPress={() => setCurrentNoteCompleted(!currentNoteCompleted)}
                   >
-                      <Text style={styles.toggleButtonText}>{currentNoteCompleted ? "Sì" : "No"}</Text>
+                      <Text style={styles.toggleButtonText}>{currentNoteCompleted ? "Yes" : "No"}</Text>
                   </TouchableOpacity>
               </View>
               <View style={styles.modalActions}>
-                <Button title="Annulla" onPress={closeNoteModal} color="#FF6347" />
-                <Button title={editingNote ? 'Salva Modifiche' : 'Aggiungi Nota'} onPress={handleSaveNote} disabled={!noteSelectedCourseId}/>
+                <Button title="Cancel" onPress={closeNoteModal} color="#FF6347" />
+                <Button title={editingNote ? 'Save Changes' : 'Add Note'} onPress={handleSaveNote} disabled={!noteSelectedCourseId}/>
               </View>
             </View>
           </View>
@@ -750,18 +751,18 @@ export default function StudyPlatformScreen() {
             visible={isEventModalVisible}
             onRequestClose={closeEventModal}>
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>{editingEvent ? 'Modifica Evento' : 'Nuovo Evento'}</Text>
+                <View style={[styles.modalContent, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#2D3748'}]}>
+                <Text style={[styles.modalTitle, {color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}>{editingEvent ? 'Edit Event' : 'New Event'}</Text>
                 <TextInput
-                    style={styles.input}
-                    placeholder="Titolo dell'evento"
+                    style={[styles.input, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#4A5568', color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}
+                    placeholder="Event title"
                     value={currentEventTitle}
                     onChangeText={setCurrentEventTitle}
-                    placeholderTextColor={appTheme === 'dark' ? '#95A5A6' : '#BDC3C7'}
+                    placeholderTextColor={appTheme === 'light' ? '#a0aec0' : '#718096'}
                 />
-                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.datePickerButton}>
-                    <Text style={styles.datePickerButtonText}>
-                        Data: {currentEventDate.toLocaleDateString('it-IT')}
+                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.datePickerButton, {backgroundColor: appTheme === 'light' ? '#ECF0F1' : '#4A5568'}]}>
+                    <Text style={[styles.datePickerButtonText, {color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}>
+                        Date: {currentEventDate.toLocaleDateString('en-GB')}
                     </Text>
                 </TouchableOpacity>
                 {showDatePicker && (
@@ -770,47 +771,48 @@ export default function StudyPlatformScreen() {
                     mode="date"
                     display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                     onChange={onDateChange}
+                    // themeVariant={appTheme} // Potrebbe non essere supportato o causare problemi su alcune versioni
                     />
                 )}
                 <ScrollView style={styles.pickerContainerScrollView} horizontal={true} showsHorizontalScrollIndicator={false}>
-                    <Text style={dynamicStyles.filterLabel}>Corso (Opz.):</Text>
+                    <Text style={dynamicStyles.filterLabel}>Course (Opt.):</Text>
                     {courses.length > 0 ? (
                         courses.map(course => (
                             <TouchableOpacity 
                                 key={course.id} 
-                                style={[styles.coursePickerButton, eventSelectedCourseId === course.id && styles.coursePickerButtonSelected]}
+                                style={[styles.coursePickerButton, {backgroundColor: appTheme === 'light' ? (eventSelectedCourseId === course.id ? '#3498DB' : '#ECF0F1') : (eventSelectedCourseId === course.id ? '#3498DB' : '#4A5568') }]}
                                 onPress={() => setEventSelectedCourseId(eventSelectedCourseId === course.id ? null : course.id)}
                             >
-                                <Text style={styles.coursePickerButtonText}>{course.name}</Text>
+                                <Text style={[styles.coursePickerButtonText, {color: appTheme === 'light' ? '#2C3E50' : (eventSelectedCourseId === course.id ? '#FFFFFF' : '#A0AEC0')}]}>{course.name}</Text>
                             </TouchableOpacity>
                         ))
-                    ) : <Text style={styles.emptyPickerText}> Nessun corso disponibile.</Text>}
+                    ) : <Text style={[styles.emptyPickerText, {color: appTheme === 'light' ? '#7F8C8D' : '#A0AEC0'}]}> No courses available.</Text>}
                 </ScrollView>
                 <View style={styles.pickerContainer}>
-                    <Text style={dynamicStyles.filterLabel}>Priorità:</Text>
+                    <Text style={dynamicStyles.filterLabel}>Priority:</Text>
                     <View style={styles.priorityOptionsContainer}>
-                        {(['Bassa', 'Media', 'Alta'] as EventPriority[]).map(prio => (
+                        {(['Low', 'Medium', 'High'] as EventPriority[]).map(prio => (
                              <TouchableOpacity 
                                 key={prio} 
-                                style={[styles.coursePickerButton, currentEventPriority === prio && styles.coursePickerButtonSelected]}
+                                style={[styles.coursePickerButton, {backgroundColor: appTheme === 'light' ? (currentEventPriority === prio ? '#3498DB' : '#ECF0F1') : (currentEventPriority === prio ? '#3498DB' : '#4A5568') }]}
                                 onPress={() => setCurrentEventPriority(prio)}
                             >
-                                <Text style={styles.coursePickerButtonText}>{prio}</Text>
+                                <Text style={[styles.coursePickerButtonText, {color: appTheme === 'light' ? '#2C3E50' : (currentEventPriority === prio ? '#FFFFFF' : '#A0AEC0')}]}>{prio}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
                 </View>
                 <TextInput
-                    style={[styles.input, styles.textAreaShort]}
-                    placeholder="Descrizione (opzionale)"
+                    style={[styles.input, styles.textAreaShort, {backgroundColor: appTheme === 'light' ? '#FFFFFF' : '#4A5568', color: appTheme === 'light' ? '#2c3e50' : '#E2E8F0'}]}
+                    placeholder="Description (optional)"
                     value={currentEventDescription}
                     onChangeText={setCurrentEventDescription}
                     multiline
-                    placeholderTextColor={appTheme === 'dark' ? '#95A5A6' : '#BDC3C7'}
+                    placeholderTextColor={appTheme === 'light' ? '#a0aec0' : '#718096'}
                 />
                 <View style={styles.modalActions}>
-                    <Button title="Annulla" onPress={closeEventModal} color="#FF6347" />
-                    <Button title={editingEvent ? 'Salva Modifiche' : 'Aggiungi Evento'} onPress={handleSaveEvent} />
+                    <Button title="Cancel" onPress={closeEventModal} color="#FF6347" />
+                    <Button title={editingEvent ? 'Save Changes' : 'Add Event'} onPress={handleSaveEvent} />
                 </View>
                 </View>
             </View>
@@ -826,7 +828,7 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
   },
   sectionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.8)',
     borderRadius: 10,
     padding: 15,
     marginBottom: 20,
@@ -840,15 +842,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   addButton: {
     backgroundColor: '#3498DB',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 15,
     borderRadius: 20,
   },
   addButtonText: {
@@ -860,7 +862,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#BDC3C7',
   },
   listItem: {
-    backgroundColor: '#ECF0F1',
+    backgroundColor: 'rgba(236, 240, 241,0.7)',
     padding: 12,
     borderRadius: 8,
     marginBottom: 10,
@@ -882,12 +884,12 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginLeft: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 5,
     backgroundColor: '#95A5A6',
     marginTop: 4, 
-    minWidth: 70, 
+    minWidth: 75,
     alignItems: 'center', 
   },
   actionButtonText: {
@@ -904,14 +906,13 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 10,
+    padding: 25,
+    borderRadius: 15,
     width: '90%',
     maxHeight: '90%', 
     shadowColor: '#000',
@@ -921,20 +922,17 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 25,
     textAlign: 'center',
-    color: '#2c3e50',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#BDC3C7',
-    borderRadius: 5,
-    padding: 12,
-    marginBottom: 15,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 18,
     fontSize: 16,
-    color: '#2c3e50', 
   },
   textArea: {
     minHeight: 100,
@@ -947,7 +945,7 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    marginTop: 20, 
+    marginTop: 25,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -955,24 +953,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
+  filterScrollView: {
+    maxHeight: 40,
+  },
   courseFilterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#ECF0F1',
-    borderRadius: 15,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
   },
   courseFilterButtonActive: {
-    backgroundColor: '#3498DB',
   },
   courseFilterButtonText: {
-    color: '#2C3E50', 
     fontSize: 13,
+  },
+  courseFilterButtonTextActive: {
+    fontWeight: 'bold',
   },
   noteCourseName: {
     fontSize: 12,
-    color: '#3498DB',
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -988,47 +989,42 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 15,
-    backgroundColor: '#ECF0F1',
     marginRight: 8, 
     alignItems: 'center',
     justifyContent: 'center',
-    height: 36, 
+    height: 38,
+    borderWidth: 1,
   },
   coursePickerButtonSelected: {
-    backgroundColor: '#3498DB',
   },
   coursePickerButtonText:{
-    color: '#2C3E50',
     fontSize: 13,
   },
   datePickerButton: {
     borderWidth: 1,
-    borderColor: '#BDC3C7',
-    borderRadius: 5,
-    padding: 12,
-    marginBottom: 15,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 18,
     alignItems: 'center',
   },
   datePickerButtonText: {
     fontSize: 16,
-    color: '#2c3e50',
   },
   utilityButton: {
-    backgroundColor: '#1ABC9C',
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   utilityButtonText: {
-    color: 'white',
+    color: 'purple',
     fontWeight: '500',
+    fontSize: 15,
   },
   courseItemInfo: {
     flex: 1,
   },
   completedNote: {
-    backgroundColor: '#D5F5E3', 
     borderColor: '#ABEBC6',
     borderWidth:1,
   },
@@ -1043,10 +1039,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 20,
-    backgroundColor: '#BDC3C7',
   },
   toggleButtonActive: {
-    backgroundColor: '#2ECC71',
   },
   toggleButtonText: {
     color: 'white',
@@ -1054,7 +1048,6 @@ const styles = StyleSheet.create({
   },
   emptyPickerText: {
     alignSelf: 'center',
-    color: '#7F8C8D',
     marginLeft: 5,
   },
   priorityOptionsContainer: {
@@ -1067,9 +1060,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     marginTop: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     alignSelf: 'flex-start',
     overflow: 'hidden', 
     color: 'white',
