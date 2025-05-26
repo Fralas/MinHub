@@ -9,12 +9,15 @@ import { requestPermissionsAsync, scheduleLocalNotification } from '../src/servi
 
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
+const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, isDark, setTheme } = useTheme();
   const { t } = useI18n();
   const styles = createThemedStyles(theme);
+
+  const [isPinEnabled, setIsPinEnabled] = React.useState(false);
 
   const handleLogout = async () => {
     try {
@@ -51,6 +54,20 @@ export default function SettingsScreen() {
     Alert.alert("Notification Scheduled", "Test notification has been scheduled. Check your device notifications.");
   };
 
+  const togglePinSetting = async (value: boolean) => {
+    setIsPinEnabled(value); 
+    await AsyncStorage.setItem(PIN_ENABLED_KEY, JSON.stringify(value));
+    if (value) {
+      Alert.alert("Set PIN", "PIN");
+    } else {
+      Alert.alert("PIN Disabled", "PIN has been disabled.");
+    }
+  };
+
+  const handlePasswordRecovery = () => {
+    Alert.alert("Password Recovery", "pw");
+  };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -61,10 +78,27 @@ export default function SettingsScreen() {
                 <Text style={styles.rowLabel}>{t('settings.editProfile')}</Text>
                 <Text style={styles.rowIcon}>›</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.row} onPress={handlePasswordRecovery}>
+                <Text style={styles.rowLabel}>{t('settings.passwordRecovery', {defaultValue: 'Password Recovery'})}</Text> 
+                <Text style={styles.rowIcon}>›</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
                 <Text style={styles.rowLabel}>{t('settings.notifications')}</Text>
                 <Text style={styles.rowIcon}>›</Text>
             </TouchableOpacity>
+            </View>
+
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('settings.security', {defaultValue: 'Security'})}</Text>
+                <View style={styles.row}>
+                    <Text style={styles.rowLabel}>{t('settings.enablePin', {defaultValue: 'Enable PIN Lock'})}</Text>
+                    <Switch
+                        value={isPinEnabled}
+                        onValueChange={togglePinSetting}
+                        trackColor={{ false: '#767577', true: theme.primary }}
+                        thumbColor={isPinEnabled ? theme.primary : '#f4f3f4'}
+                    />
+                </View>
             </View>
 
             <View style={styles.section}>
