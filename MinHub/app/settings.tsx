@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useI18n } from '../src/contexts/I18nContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { requestPermissionsAsync, scheduleLocalNotification } from '../src/services/notificationManager';
@@ -10,6 +11,7 @@ import { requestPermissionsAsync, scheduleLocalNotification } from '../src/servi
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
+const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -17,12 +19,34 @@ export default function SettingsScreen() {
   const { t } = useI18n();
   const styles = createThemedStyles(theme);
 
-  const [isPinEnabled, setIsPinEnabled] = React.useState(false);
+  const [isPinEnabled, setIsPinEnabled] = useState(false);
+  const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(true);
+
+  const loadPinStatus = useCallback(async () => {
+    setIsLoadingPinStatus(true);
+    try {
+        const pinStatus = await AsyncStorage.getItem(PIN_ENABLED_KEY);
+        setIsPinEnabled(pinStatus === 'true');
+    } catch (error) {
+        console.error("Failed to load PIN status", error);
+        setIsPinEnabled(false);
+    } finally {
+        setIsLoadingPinStatus(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadPinStatus();
+    }, [loadPinStatus])
+  );
 
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem(USER_PROFILE_KEY);
       await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
+      await AsyncStorage.removeItem(PIN_ENABLED_KEY);
+      await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
       router.replace('/');
     } catch (error) {
       console.error("Error during logout:", error);
@@ -54,19 +78,43 @@ export default function SettingsScreen() {
     Alert.alert("Notification Scheduled", "Test notification has been scheduled. Check your device notifications.");
   };
 
-  const togglePinSetting = async (value: boolean) => {
-    setIsPinEnabled(value); 
-    await AsyncStorage.setItem(PIN_ENABLED_KEY, JSON.stringify(value));
-    if (value) {
-      Alert.alert("Set PIN", "PIN");
+  const handleTogglePinSetting = async () => {
+    if (isPinEnabled) {
+      Alert.alert(
+        "Disable PIN",
+        "Are you sure you want to disable PIN lock?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Disable", 
+            style: "destructive",
+            onPress: async () => {
+              setIsLoadingPinStatus(true);
+              await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
+              await AsyncStorage.setItem(PIN_ENABLED_KEY, JSON.stringify(false));
+              setIsPinEnabled(false);
+              setIsLoadingPinStatus(false);
+              Alert.alert("PIN Disabled", "PIN lock has been disabled.");
+            }
+          }
+        ]
+      );
     } else {
-      Alert.alert("PIN Disabled", "PIN has been disabled.");
+      router.push('/set-pin');
     }
   };
 
   const handlePasswordRecovery = () => {
-    Alert.alert("Password Recovery", "pw");
+    Alert.alert("Password Recovery", "Password recovery process would start here.");
   };
+
+  if (isLoadingPinStatus) {
+    return (
+        <View style={[styles.container, styles.loadingIndicatorContainer]}>
+            <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -94,7 +142,7 @@ export default function SettingsScreen() {
                     <Text style={styles.rowLabel}>{t('settings.enablePin', {defaultValue: 'Enable PIN Lock'})}</Text>
                     <Switch
                         value={isPinEnabled}
-                        onValueChange={togglePinSetting}
+                        onValueChange={handleTogglePinSetting}
                         trackColor={{ false: '#767577', true: theme.primary }}
                         thumbColor={isPinEnabled ? theme.primary : '#f4f3f4'}
                     />
@@ -144,6 +192,11 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
     },
     safeArea: {
       flex: 1,
+    },
+    loadingIndicatorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     section: {
       marginTop: 20,
