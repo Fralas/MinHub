@@ -9,7 +9,9 @@ import {
   Alert,
   ScrollView,
   Animated,
+  Switch,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
 const NUM_PAIRS_EASY = 6;
 const NUM_PAIRS_MEDIUM = 8;
@@ -41,6 +43,8 @@ export default function MemoryGame() {
   const [gameOver, setGameOver] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState<number>(TIMED_MODE_DURATION);
+  const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerWidthAnim = useRef(new Animated.Value(1)).current;
 
@@ -77,11 +81,13 @@ export default function MemoryGame() {
         setMatchedIndices(prev => [...prev, first, second]);
         setScore(prev => prev + 100);
         setFlippedIndices([]);
+        if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setTimeout(() => {
           setFlippedIndices([]);
           setLives(prev => {
             const newLives = prev - 1;
+            if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             if (newLives <= 0) {
               setGameOver(true);
               clearInterval(timerRef.current!);
@@ -104,6 +110,7 @@ export default function MemoryGame() {
   useEffect(() => {
     if (matchedIndices.length === cards.length && cards.length > 0) {
       clearInterval(timerRef.current!);
+      if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
     }
   }, [matchedIndices]);
@@ -116,6 +123,7 @@ export default function MemoryGame() {
           if (prev <= 1) {
             clearInterval(timerRef.current!);
             setGameOver(true);
+            if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             Alert.alert(
               'Time Up!',
               `You ran out of time!\nYour Score: ${score}`,
@@ -130,7 +138,6 @@ export default function MemoryGame() {
         });
       }, 1000);
 
-      // Animate timer bar
       Animated.timing(timerWidthAnim, {
         toValue: 0,
         duration: TIMED_MODE_DURATION * 1000,
@@ -149,6 +156,7 @@ export default function MemoryGame() {
       !gameOver
     ) {
       setFlippedIndices(prev => [...prev, index]);
+      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
 
@@ -219,6 +227,15 @@ export default function MemoryGame() {
         ))}
       </View>
 
+      <View style={styles.toggleContainer}>
+        <Text style={styles.infoText}>Haptics:</Text>
+        <Switch
+          value={hapticsEnabled}
+          onValueChange={setHapticsEnabled}
+          thumbColor={hapticsEnabled ? '#4caf50' : '#ccc'}
+        />
+      </View>
+
       <Text style={styles.infoText}>
         Lives: {lives} | Score: {score}
         {gameMode === 'timed' && ` | Time Left: ${timeLeft}s`}
@@ -264,6 +281,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 8,
     gap: 8,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
   },
   difficultyButton: {
     paddingVertical: 8,
