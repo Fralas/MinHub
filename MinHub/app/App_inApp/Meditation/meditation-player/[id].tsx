@@ -31,9 +31,14 @@ export default function MeditationPlayerScreen() {
 
   useEffect(() => {
     const meditationDetails = MEDITATIONS_DATA.find((m: Meditation) => m.id === id);
-    if (meditationDetails) {
+    console.log("Attempting to load meditation with id:", id);
+    console.log("Found meditationDetails:", JSON.stringify(meditationDetails, null, 2));
+    
+    if (meditationDetails && meditationDetails.audioFile !== undefined) {
       setMeditation(meditationDetails);
     } else {
+      console.error("Meditation or audioFile not found (or audioFile is undefined) for id:", id, "Details:", meditationDetails);
+      Alert.alert("Error", "Meditation data or audio file is missing. Please check the data source and require paths.");
       if (router.canGoBack()) {
         router.back();
       } else {
@@ -52,26 +57,32 @@ export default function MeditationPlayerScreen() {
 
   const loadBell = async () => {
     try {
-      const { sound } = await Audio.Sound.createAsync(require('../../../../assets/audio/bell.mp3'));
+      const { sound } = await Audio.Sound.createAsync(require('../../../../assets/audio/meditationAUDIO/bell.mp3'));
       bellSound.current = sound;
-    } catch {}
+    } catch (error) {
+      console.error("Failed to load bell sound:", error);
+    }
   };
 
   const playBell = async () => {
     try {
-      await bellSound.current?.replayAsync();
-    } catch {}
+      await bellSound.current?.setStatusAsync({ shouldPlay: true, positionMillis: 0 });
+    } catch (error) {
+      console.error("Failed to play bell sound:", error);
+    }
   };
 
   const loadSoundAsync = useCallback(async (currentMeditation: Meditation) => {
-    if (!currentMeditation || !currentMeditation.audioFile) {
+    if (!currentMeditation || currentMeditation.audioFile === undefined) {
       setIsLoading(false);
-      Alert.alert("Errore Audio", "File audio non specificato per questa meditazione.");
+      Alert.alert("Audio Error", "Audio file not specified or undefined for this meditation.");
       return null;
     }
 
     setIsLoading(true);
     let newSoundInstance: Audio.Sound | null = null;
+    console.log("loadSoundAsync - currentMeditation.audioFile:", currentMeditation.audioFile);
+
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -82,34 +93,39 @@ export default function MeditationPlayerScreen() {
         playThroughEarpieceAndroid: false,
       });
 
-      const { sound: createdSound } = await Audio.Sound.createAsync(
+      const { sound: createdSound, status } = await Audio.Sound.createAsync(
         currentMeditation.audioFile,
         { shouldPlay: false },
         async (playbackStatus) => {
           if (!playbackStatus.isLoaded) {
             if (playbackStatus.error) {
-              Alert.alert("Errore Audio", `Impossibile caricare la meditazione: ${playbackStatus.error}`);
+              Alert.alert("Audio Error", `Unable to load meditation: ${playbackStatus.error}`);
             }
           } else {
             setPositionMillis(playbackStatus.positionMillis);
             setDurationMillis(playbackStatus.durationMillis ?? null);
-
             if (playbackStatus.didJustFinish && !playbackStatus.isLooping) {
               setIsPlaying(false);
               setPositionMillis(0);
-              createdSound.setPositionAsync(0);
+              createdSound.setPositionAsync(0).catch(e => console.error("Error setting position on finish:", e));
               if (!motivationalShown) {
                 await playBell();
-                Alert.alert("Ben fatto", "Hai completato la meditazione!");
+                Alert.alert("Well done!", "You have completed the meditation!");
                 setMotivationalShown(true);
               }
             }
           }
         }
       );
-      newSoundInstance = createdSound;
-    } catch {
-      Alert.alert("Errore Audio", "Impossibile caricare il suono.");
+      if(status.isLoaded) {
+        newSoundInstance = createdSound;
+        setDurationMillis(status.durationMillis ?? null);
+      } else {
+        Alert.alert("Audio Error", "Sound resource could not be loaded.");
+      }
+    } catch (error: any) {
+      Alert.alert("Audio Error", `Failed to load sound: ${error.message}`);
+      console.error("Full error loading sound:", error);
     } finally {
       setIsLoading(false);
     }
@@ -117,37 +133,31 @@ export default function MeditationPlayerScreen() {
   }, [motivationalShown]);
 
   useEffect(() => {
-    let currentSound: Audio.Sound | null = null;
+    let soundToUnload: Audio.Sound | null = null;
     const setupAudio = async () => {
       await loadBell();
-      if (meditation) {
+      console.log("Setting up audio for meditation object:", JSON.stringify(meditation, null, 2));
+      if (meditation && meditation.audioFile !== undefined) {
         const newLoadedSound = await loadSoundAsync(meditation);
         if (newLoadedSound) {
-          currentSound = newLoadedSound;
+          soundToUnload = newLoadedSound;
           setSound(newLoadedSound);
         }
+      } else if (meditation && meditation.audioFile === undefined) {
+          console.error("Meditation object is present, but audioFile is undefined.");
+          Alert.alert("Audio Error", "Audio data is missing for this meditation.");
+          setIsLoading(false);
+      } else {
+          setIsLoading(false);
       }
     };
     setupAudio();
     return () => {
-      currentSound?.unloadAsync();
+      soundToUnload?.unloadAsync();
       bellSound.current?.unloadAsync();
     };
   }, [meditation, loadSoundAsync]);
 
-  useEffect(() => {
-    let interval: number;
-    if (sound && isPlaying) {
-      interval = setInterval(async () => {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          setPositionMillis(status.positionMillis);
-          setDurationMillis(status.durationMillis ?? null);
-        }
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [sound, isPlaying]);
 
   const handlePlayPause = async () => {
     if (!sound) {
@@ -158,8 +168,8 @@ export default function MeditationPlayerScreen() {
           try {
             await reloadedSound.playAsync();
             setIsPlaying(true);
-          } catch {
-            Alert.alert("Errore Player", "Impossibile avviare la riproduzione dopo il ricaricamento.");
+          } catch (e) {
+            Alert.alert("Player Error", "Could not start playback after reload.");
           }
         }
       }
@@ -168,8 +178,13 @@ export default function MeditationPlayerScreen() {
     try {
       const status = await sound.getStatusAsync();
       if (!status.isLoaded) {
-        Alert.alert("Errore Player", "Suono non caricato correttamente. Riprova.");
-        await loadSoundAsync(meditation!);
+        Alert.alert("Player Error", "Sound not properly loaded. Attempting to reload.");
+        const reloadedSound = await loadSoundAsync(meditation!); 
+        if(reloadedSound){
+            setSound(reloadedSound);
+            await reloadedSound.playAsync();
+            setIsPlaying(true);
+        }
         return;
       }
 
@@ -183,8 +198,8 @@ export default function MeditationPlayerScreen() {
         }
       }
       setIsPlaying(!isPlaying);
-    } catch {
-      Alert.alert("Errore Player", "Impossibile eseguire l'azione.");
+    } catch (e) {
+      Alert.alert("Player Error", "Could not perform action.");
     }
   };
 
@@ -193,9 +208,10 @@ export default function MeditationPlayerScreen() {
       try {
         await sound.setPositionAsync(0);
         setPositionMillis(0);
+        if(isPlaying) await sound.pauseAsync();
         setIsPlaying(false);
-      } catch {
-        Alert.alert("Errore", "Impossibile riportare all'inizio.");
+      } catch (e) {
+        Alert.alert("Error", "Could not reset track.");
       }
     }
   };
@@ -203,10 +219,11 @@ export default function MeditationPlayerScreen() {
   const toggleLoop = async () => {
     if (sound) {
       try {
-        await sound.setIsLoopingAsync(!isLooping);
-        setIsLooping(!isLooping);
-      } catch {
-        Alert.alert("Errore", "Non è stato possibile cambiare la modalità loop.");
+        const newLoopStatus = !isLooping;
+        await sound.setIsLoopingAsync(newLoopStatus);
+        setIsLooping(newLoopStatus);
+      } catch (e) {
+        Alert.alert("Error", "Could not change loop mode.");
       }
     }
   };
@@ -217,7 +234,9 @@ export default function MeditationPlayerScreen() {
         const newPosition = value * durationMillis;
         await sound.setPositionAsync(newPosition);
         setPositionMillis(newPosition);
-      } catch {}
+      } catch (e) {
+        console.error("Seek error:", e)
+      }
     }
   };
 
@@ -225,7 +244,7 @@ export default function MeditationPlayerScreen() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00796B" />
-        <Text>Caricamento meditazione...</Text>
+        <Text style={styles.loadingText}>Loading meditation...</Text>
       </SafeAreaView>
     );
   }
@@ -243,14 +262,15 @@ export default function MeditationPlayerScreen() {
           <Text style={styles.description}>{meditation.description}</Text>
 
           <Slider
-            style={{ width: '80%', height: 40 }}
+            style={styles.slider}
             minimumValue={0}
             maximumValue={1}
-            value={durationMillis ? positionMillis / durationMillis : 0}
+            value={(durationMillis && durationMillis > 0) ? positionMillis / durationMillis : 0}
             minimumTrackTintColor="#FFFFFF"
             maximumTrackTintColor="#B2DFDB"
             thumbTintColor="#FFFFFF"
             onSlidingComplete={handleSeek}
+            disabled={!sound || !durationMillis}
           />
 
           <View style={styles.timerContainer}>
@@ -259,17 +279,17 @@ export default function MeditationPlayerScreen() {
             <Text style={styles.timeText}>{formatTime(durationMillis)}</Text>
           </View>
 
-          <TouchableOpacity onPress={handlePlayPause} style={styles.playButton}>
-            <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={80} color="#FFFFFF" />
+          <TouchableOpacity onPress={handlePlayPause} style={styles.playButton} disabled={!sound}>
+            <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={80} color={sound ? "#FFFFFF" : "#a0a0a0"} />
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', marginTop: 20 }}>
-            <TouchableOpacity onPress={handleReset} style={{ marginHorizontal: 20 }}>
-              <Ionicons name="refresh-circle" size={50} color="#FFFFFF" />
+          <View style={styles.controlsRow}>
+            <TouchableOpacity onPress={handleReset} style={styles.controlButton} disabled={!sound}>
+              <Ionicons name="refresh-circle" size={50} color={sound ? "#FFFFFF" : "#a0a0a0"} />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={toggleLoop} style={{ marginHorizontal: 20 }}>
-              <Ionicons name={isLooping ? "repeat" : "repeat-outline"} size={50} color={isLooping ? "#4CAF50" : "#FFFFFF"} />
+            <TouchableOpacity onPress={toggleLoop} style={styles.controlButton} disabled={!sound}>
+              <Ionicons name={isLooping ? "repeat" : "repeat-outline"} size={50} color={isLooping && sound ? "#4CAF50" : (sound ? "#FFFFFF" : "#a0a0a0")} />
             </TouchableOpacity>
           </View>
         </View>
@@ -289,15 +309,15 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   loadingContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    flex:1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(224, 242, 247, 0.8)',
-    zIndex: 10,
+  },
+  loadingText: {
+      marginTop: 10,
+      fontSize: 16,
+      color: '#004D40'
   },
   container: {
     flex: 1,
@@ -320,6 +340,11 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     paddingHorizontal: 10,
   },
+  slider: {
+    width: '90%',
+    height: 40,
+    marginBottom: 10,
+  },
   timerContainer: {
     flexDirection: 'row',
     marginBottom: 30,
@@ -331,4 +356,11 @@ const styles = StyleSheet.create({
   playButton: {
     padding: 10,
   },
+  controlsRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  controlButton: {
+    marginHorizontal: 20,
+  }
 });

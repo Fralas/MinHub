@@ -8,8 +8,7 @@ import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 function ThemedStack() {
   const { theme, isDark } = useTheme();
   const { t } = useI18n();
-
-  const headerTintColor = isDark ? '#FFFFFF' : '#FFFFFF'; 
+  const headerTintColor = isDark ? '#FFFFFF' : '#FFFFFF';
 
   return (
     <Stack>
@@ -23,20 +22,13 @@ function ThemedStack() {
           title: t('home.defaultTitle'),
           headerStyle: { backgroundColor: theme.primary },
           headerTintColor: headerTintColor,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-            color: headerTintColor,
-          },
+          headerTitleStyle: { fontWeight: 'bold', color: headerTintColor },
           headerRight: () => (
             <TouchableOpacity
               onPress={() => navigation.navigate('settings')}
               style={{ marginRight: 15, padding: 5 }}
             >
-              <Ionicons
-                name="settings-outline"
-                size={26}
-                color={headerTintColor}
-              />
+              <Ionicons name="settings-outline" size={26} color={headerTintColor} />
             </TouchableOpacity>
           ),
         })}
@@ -44,39 +36,41 @@ function ThemedStack() {
       <Stack.Screen
         name="settings"
         options={{
-          headerShown: true,
-          title: t('settings.title'),
-          presentation: 'modal',
-          headerStyle: { backgroundColor: theme.card },
-          headerTintColor: theme.text,
+          headerShown: true, title: t('settings.title'), presentation: 'modal',
+          headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
       />
       <Stack.Screen
         name="notification-settings"
         options={{
-          title: t('notificationSettings.title'),
-          headerShown: true,
-          headerStyle: { backgroundColor: theme.card },
-          headerTintColor: theme.text,
+          title: t('notificationSettings.title'), headerShown: true,
+          headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
       />
       <Stack.Screen
         name="edit-profile"
         options={{
-          title: t('editProfile.title'),
-          headerShown: true,
-          headerStyle: { backgroundColor: theme.card },
-          headerTintColor: theme.text,
+          title: t('editProfile.title'), headerShown: true,
+          headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
       />
        <Stack.Screen
         name="language-settings"
         options={{
-          title: t('languages.select'),
+          title: t('languages.select'), headerShown: true,
+          headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
+        }}
+      />
+      <Stack.Screen
+        name="set-pin"
+        options={{
+          title: 'Set PIN', 
           headerShown: true,
+          presentation: 'modal', 
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
