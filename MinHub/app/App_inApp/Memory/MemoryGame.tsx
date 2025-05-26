@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { addWeeks } from 'date-fns';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,13 +8,14 @@ import {
   Dimensions,
   Alert,
   ScrollView,
+  Animated,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NUM_PAIRS_EASY = 6;
 const NUM_PAIRS_MEDIUM = 8;
 const NUM_PAIRS_HARD = 12;
 const MAX_LIVES = 5;
+const TIMED_MODE_DURATION = 60; // seconds
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -27,16 +29,20 @@ const generateShuffledCards = (numPairs: number): number[] => {
 };
 
 type Difficulty = 'easy' | 'medium' | 'hard';
+type GameMode = 'classic' | 'timed';
 
 export default function MemoryGame() {
   const [cards, setCards] = useState<number[]>([]);
   const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
   const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [gameMode, setGameMode] = useState<GameMode>('classic');
   const [lives, setLives] = useState<number>(MAX_LIVES);
   const [gameOver, setGameOver] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
-  const [highScore, setHighScore] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number>(TIMED_MODE_DURATION);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerWidthAnim = useRef(new Animated.Value(1)).current;
 
   const getNumPairs = (): number => {
     switch (difficulty) {
@@ -54,31 +60,15 @@ export default function MemoryGame() {
     setGameOver(false);
     const shuffled = generateShuffledCards(getNumPairs());
     setCards(shuffled);
-  };
-
-  const loadHighScore = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('memory_high_score');
-      if (stored !== null) {
-        setHighScore(parseInt(stored));
-      }
-    } catch (e) {
-      console.log('Error loading high score:', e);
-    }
-  };
-
-  const saveHighScore = async (newScore: number) => {
-    try {
-      await AsyncStorage.setItem('memory_high_score', newScore.toString());
-    } catch (e) {
-      console.log('Error saving high score:', e);
+    if (gameMode === 'timed') {
+      setTimeLeft(TIMED_MODE_DURATION);
+      timerWidthAnim.setValue(1); // Reset width
     }
   };
 
   useEffect(() => {
     resetGame();
-    loadHighScore();
-  }, [difficulty]);
+  }, [difficulty, gameMode]);
 
   useEffect(() => {
     if (flippedIndices.length === 2) {
@@ -94,6 +84,7 @@ export default function MemoryGame() {
             const newLives = prev - 1;
             if (newLives <= 0) {
               setGameOver(true);
+              clearInterval(timerRef.current!);
               Alert.alert(
                 'Game Over',
                 `You ran out of lives!\nYour Score: ${score}`,
@@ -112,15 +103,43 @@ export default function MemoryGame() {
 
   useEffect(() => {
     if (matchedIndices.length === cards.length && cards.length > 0) {
-      (async () => {
-        Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
-        if (score > highScore) {
-          setHighScore(score);
-          await saveHighScore(score);
-        }
-      })();
+      clearInterval(timerRef.current!);
+      Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
     }
   }, [matchedIndices]);
+
+  useEffect(() => {
+    if (gameMode === 'timed') {
+      timerRef.current && clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            setGameOver(true);
+            Alert.alert(
+              'Time Up!',
+              `You ran out of time!\nYour Score: ${score}`,
+              [
+                { text: 'Retry', onPress: () => resetGame() },
+                { text: 'Cancel', style: 'cancel' }
+              ]
+            );
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Animate timer bar
+      Animated.timing(timerWidthAnim, {
+        toValue: 0,
+        duration: TIMED_MODE_DURATION * 1000,
+        useNativeDriver: false,
+      }).start();
+
+      return () => clearInterval(timerRef.current!);
+    }
+  }, [gameMode]);
 
   const handleCardPress = (index: number) => {
     if (
@@ -147,9 +166,36 @@ export default function MemoryGame() {
     );
   };
 
+  const animatedBarWidth = timerWidthAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Memory Game</Text>
+
+      <View style={styles.modeContainer}>
+        {(['classic', 'timed'] as GameMode[]).map(mode => (
+          <TouchableOpacity
+            key={mode}
+            style={[
+              styles.difficultyButton,
+              gameMode === mode && styles.selectedButton
+            ]}
+            onPress={() => setGameMode(mode)}
+          >
+            <Text
+              style={[
+                styles.difficultyText,
+                gameMode === mode && styles.selectedText
+              ]}
+            >
+              {mode.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <View style={styles.difficultyContainer}>
         {(['easy', 'medium', 'hard'] as Difficulty[]).map(mode => (
@@ -174,8 +220,15 @@ export default function MemoryGame() {
       </View>
 
       <Text style={styles.infoText}>
-        Lives: {lives} | Score: {score} | High Score: {highScore}
+        Lives: {lives} | Score: {score}
+        {gameMode === 'timed' && ` | Time Left: ${timeLeft}s`}
       </Text>
+
+      {gameMode === 'timed' && (
+        <View style={styles.timerBarContainer}>
+          <Animated.View style={[styles.timerBar, { width: animatedBarWidth }]} />
+        </View>
+      )}
 
       <View style={styles.grid}>
         {cards.map((value, index) => renderCard(value, index))}
@@ -207,6 +260,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
+  modeContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    gap: 8,
+  },
   difficultyButton: {
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -226,8 +284,20 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 15,
+    marginBottom: 8,
     color: '#444',
+  },
+  timerBarContainer: {
+    height: 10,
+    width: '90%',
+    backgroundColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  timerBar: {
+    height: '100%',
+    backgroundColor: '#f44336',
   },
   grid: {
     flexDirection: 'row',
