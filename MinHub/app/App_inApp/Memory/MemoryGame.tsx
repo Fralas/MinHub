@@ -1,128 +1,158 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Alert,
-  FlatList,
   Dimensions,
+  Alert,
+  ScrollView,
 } from 'react-native';
 
-const CARD_PAIRS = {
-  Easy: 4,
-  Medium: 8,
-  Hard: 12,
-};
+const NUM_PAIRS_EASY = 6;
+const NUM_PAIRS_MEDIUM = 8;
+const NUM_PAIRS_HARD = 12;
+const MAX_LIVES = 5;
 
-const generateShuffledCards = (pairCount: number): { id: number; value: number; matched: boolean }[] => {
-  const values = Array.from({ length: pairCount }, (_, i) => i + 1);
-  const cards = [...values, ...values].map((value, index) => ({
-    id: index,
-    value,
-    matched: false,
-  }));
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const generateShuffledCards = (numPairs: number): number[] => {
+  const cards = [];
+  for (let i = 1; i <= numPairs; i++) {
+    cards.push(i);
+    cards.push(i);
+  }
   return cards.sort(() => Math.random() - 0.5);
 };
 
+type Difficulty = 'easy' | 'medium' | 'hard';
+
 export default function MemoryGame() {
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Easy');
-  const [cards, setCards] = useState(() => generateShuffledCards(CARD_PAIRS[difficulty]));
-  const [flipped, setFlipped] = useState<number[]>([]);
-  const [matchedIds, setMatchedIds] = useState<number[]>([]);
-  const [moves, setMoves] = useState(0);
+  const [cards, setCards] = useState<number[]>([]);
+  const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
+  const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [lives, setLives] = useState<number>(MAX_LIVES);
+  const [gameOver, setGameOver] = useState<boolean>(false);
+
+  const getNumPairs = (): number => {
+    switch (difficulty) {
+      case 'easy':
+        return NUM_PAIRS_EASY;
+      case 'medium':
+        return NUM_PAIRS_MEDIUM;
+      case 'hard':
+        return NUM_PAIRS_HARD;
+    }
+  };
+
+  const resetGame = () => {
+    setMatchedIndices([]);
+    setFlippedIndices([]);
+    setLives(MAX_LIVES);
+    setGameOver(false);
+    const shuffled = generateShuffledCards(getNumPairs());
+    setCards(shuffled);
+  };
 
   useEffect(() => {
-    setCards(generateShuffledCards(CARD_PAIRS[difficulty]));
-    setFlipped([]);
-    setMatchedIds([]);
-    setMoves(0);
+    resetGame();
   }, [difficulty]);
 
   useEffect(() => {
-    if (flipped.length === 2) {
-      const [firstIdx, secondIdx] = flipped;
-      const firstCard = cards[firstIdx];
-      const secondCard = cards[secondIdx];
-      if (firstCard.value === secondCard.value) {
-        setMatchedIds(prev => [...prev, firstCard.id, secondCard.id]);
-        cards[firstIdx].matched = true;
-        cards[secondIdx].matched = true;
+    if (flippedIndices.length === 2) {
+      const [first, second] = flippedIndices;
+      if (cards[first] === cards[second]) {
+        setMatchedIndices(prev => [...prev, first, second]);
+        setFlippedIndices([]);
+      } else {
+        setTimeout(() => {
+          setFlippedIndices([]);
+          setLives(prev => {
+            const newLives = prev - 1;
+            if (newLives <= 0) {
+              setGameOver(true);
+              Alert.alert('Game Over', 'You ran out of lives!');
+            }
+            return newLives;
+          });
+        }, 1000);
       }
-      setTimeout(() => setFlipped([]), 700);
-      setMoves(prev => prev + 1);
     }
-  }, [flipped]);
+  }, [flippedIndices]);
 
   useEffect(() => {
-    if (matchedIds.length === cards.length && cards.length > 0) {
-      Alert.alert('You Win!', `You matched all pairs in ${moves} moves.`, [
-        { text: 'Play Again', onPress: () => setCards(generateShuffledCards(CARD_PAIRS[difficulty])) },
-      ]);
+    if (matchedIndices.length === cards.length && cards.length > 0) {
+      Alert.alert('You Win!', 'All cards matched!');
     }
-  }, [matchedIds]);
+  }, [matchedIndices]);
 
   const handleCardPress = (index: number) => {
-    if (flipped.length === 2 || flipped.includes(index) || matchedIds.includes(cards[index].id)) return;
-    setFlipped(prev => [...prev, index]);
+    if (flippedIndices.length < 2 && !flippedIndices.includes(index) && !matchedIndices.includes(index) && !gameOver) {
+      setFlippedIndices(prev => [...prev, index]);
+    }
   };
 
-  const numColumns = 4;
-  const { width } = Dimensions.get('window');
-  const cardSize = (width - 40) / numColumns - 10;
+  const renderCard = (value: number, index: number) => {
+    const isFlipped = flippedIndices.includes(index) || matchedIndices.includes(index);
+    return (
+      <TouchableOpacity
+        key={index}
+        style={[styles.card, isFlipped && styles.flippedCard]}
+        onPress={() => handleCardPress(index)}
+        disabled={isFlipped || gameOver}
+      >
+        <Text style={styles.cardText}>{isFlipped ? value : '?'}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Memory Game</Text>
 
-      <View style={styles.difficultySelector}>
-        {(['Easy', 'Medium', 'Hard'] as const).map(level => (
+      <View style={styles.difficultyContainer}>
+        {(['easy', 'medium', 'hard'] as Difficulty[]).map(mode => (
           <TouchableOpacity
-            key={level}
+            key={mode}
             style={[
               styles.difficultyButton,
-              difficulty === level && styles.difficultyButtonSelected,
+              difficulty === mode && styles.selectedButton
             ]}
-            onPress={() => setDifficulty(level)}
+            onPress={() => setDifficulty(mode)}
           >
-            <Text style={difficulty === level ? styles.difficultyTextSelected : styles.difficultyText}>
-              {level}
+            <Text
+              style={[
+                styles.difficultyText,
+                difficulty === mode && styles.selectedText
+              ]}
+            >
+              {mode.toUpperCase()}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.moves}>Moves: {moves}</Text>
+      <Text style={styles.livesText}>Lives: {lives}</Text>
 
-      <FlatList
-        data={cards}
-        numColumns={numColumns}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.board}
-        renderItem={({ item, index }) => {
-          const isFlipped = flipped.includes(index) || matchedIds.includes(item.id);
-          return (
-            <TouchableOpacity
-              style={[styles.card, { width: cardSize, height: cardSize }, isFlipped && styles.cardFlipped]}
-              onPress={() => handleCardPress(index)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cardText}>{isFlipped ? item.value : '?'}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-    </SafeAreaView>
+      <View style={styles.grid}>
+        {cards.map((value, index) => renderCard(value, index))}
+      </View>
+
+      <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
+        <Text style={styles.resetText}>Restart</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
+const CARD_SIZE = SCREEN_WIDTH / 5;
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#F2F2F2',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingVertical: 20,
+    backgroundColor: '#ffffff',
   },
   title: {
     fontSize: 28,
@@ -130,54 +160,67 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#333',
   },
-  difficultySelector: {
+  difficultyContainer: {
     flexDirection: 'row',
-    marginVertical: 10,
+    marginBottom: 10,
+    gap: 8,
   },
   difficultyButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginHorizontal: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#888',
-    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#ddd',
+    borderRadius: 6,
   },
-  difficultyButtonSelected: {
-    backgroundColor: '#3399FF',
-    borderColor: '#3399FF',
+  selectedButton: {
+    backgroundColor: '#4caf50',
   },
   difficultyText: {
-    color: '#444',
+    fontWeight: '600',
+    color: '#333',
   },
-  difficultyTextSelected: {
+  selectedText: {
     color: '#fff',
-    fontWeight: 'bold',
   },
-  moves: {
-    fontSize: 16,
-    color: '#666',
-    marginVertical: 5,
+  livesText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 15,
+    color: '#e53935',
   },
-  board: {
-    paddingHorizontal: 10,
-    paddingBottom: 30,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
+    width: SCREEN_WIDTH,
+    padding: 5,
   },
   card: {
-    backgroundColor: '#cccccc',
+    width: CARD_SIZE - 10,
+    height: CARD_SIZE - 10,
     margin: 5,
-    borderRadius: 10,
-    justifyContent: 'center',
+    backgroundColor: '#90caf9',
     alignItems: 'center',
-    elevation: 2,
+    justifyContent: 'center',
+    borderRadius: 10,
   },
-  cardFlipped: {
-    backgroundColor: '#3399FF',
+  flippedCard: {
+    backgroundColor: '#64b5f6',
   },
   cardText: {
     fontSize: 24,
-    fontWeight: 'bold',
     color: '#fff',
+    fontWeight: 'bold',
+  },
+  resetButton: {
+    marginTop: 20,
+    backgroundColor: '#607d8b',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  resetText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
