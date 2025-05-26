@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NUM_PAIRS_EASY = 6;
 const NUM_PAIRS_MEDIUM = 8;
@@ -34,15 +35,14 @@ export default function MemoryGame() {
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [lives, setLives] = useState<number>(MAX_LIVES);
   const [gameOver, setGameOver] = useState<boolean>(false);
+  const [score, setScore] = useState<number>(0);
+  const [highScore, setHighScore] = useState<number>(0);
 
   const getNumPairs = (): number => {
     switch (difficulty) {
-      case 'easy':
-        return NUM_PAIRS_EASY;
-      case 'medium':
-        return NUM_PAIRS_MEDIUM;
-      case 'hard':
-        return NUM_PAIRS_HARD;
+      case 'easy': return NUM_PAIRS_EASY;
+      case 'medium': return NUM_PAIRS_MEDIUM;
+      case 'hard': return NUM_PAIRS_HARD;
     }
   };
 
@@ -50,13 +50,34 @@ export default function MemoryGame() {
     setMatchedIndices([]);
     setFlippedIndices([]);
     setLives(MAX_LIVES);
+    setScore(0);
     setGameOver(false);
     const shuffled = generateShuffledCards(getNumPairs());
     setCards(shuffled);
   };
 
+  const loadHighScore = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('memory_high_score');
+      if (stored !== null) {
+        setHighScore(parseInt(stored));
+      }
+    } catch (e) {
+      console.log('Error loading high score:', e);
+    }
+  };
+
+  const saveHighScore = async (newScore: number) => {
+    try {
+      await AsyncStorage.setItem('memory_high_score', newScore.toString());
+    } catch (e) {
+      console.log('Error saving high score:', e);
+    }
+  };
+
   useEffect(() => {
     resetGame();
+    loadHighScore();
   }, [difficulty]);
 
   useEffect(() => {
@@ -64,6 +85,7 @@ export default function MemoryGame() {
       const [first, second] = flippedIndices;
       if (cards[first] === cards[second]) {
         setMatchedIndices(prev => [...prev, first, second]);
+        setScore(prev => prev + 100);
         setFlippedIndices([]);
       } else {
         setTimeout(() => {
@@ -72,7 +94,14 @@ export default function MemoryGame() {
             const newLives = prev - 1;
             if (newLives <= 0) {
               setGameOver(true);
-              Alert.alert('Game Over', 'You ran out of lives!');
+              Alert.alert(
+                'Game Over',
+                `You ran out of lives!\nYour Score: ${score}`,
+                [
+                  { text: 'Retry', onPress: () => resetGame() },
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
             }
             return newLives;
           });
@@ -83,12 +112,23 @@ export default function MemoryGame() {
 
   useEffect(() => {
     if (matchedIndices.length === cards.length && cards.length > 0) {
-      Alert.alert('You Win!', 'All cards matched!');
+      (async () => {
+        Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
+        if (score > highScore) {
+          setHighScore(score);
+          await saveHighScore(score);
+        }
+      })();
     }
   }, [matchedIndices]);
 
   const handleCardPress = (index: number) => {
-    if (flippedIndices.length < 2 && !flippedIndices.includes(index) && !matchedIndices.includes(index) && !gameOver) {
+    if (
+      flippedIndices.length < 2 &&
+      !flippedIndices.includes(index) &&
+      !matchedIndices.includes(index) &&
+      !gameOver
+    ) {
       setFlippedIndices(prev => [...prev, index]);
     }
   };
@@ -133,7 +173,9 @@ export default function MemoryGame() {
         ))}
       </View>
 
-      <Text style={styles.livesText}>Lives: {lives}</Text>
+      <Text style={styles.infoText}>
+        Lives: {lives} | Score: {score} | High Score: {highScore}
+      </Text>
 
       <View style={styles.grid}>
         {cards.map((value, index) => renderCard(value, index))}
@@ -181,11 +223,11 @@ const styles = StyleSheet.create({
   selectedText: {
     color: '#fff',
   },
-  livesText: {
+  infoText: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 15,
-    color: '#e53935',
+    color: '#444',
   },
   grid: {
     flexDirection: 'row',
