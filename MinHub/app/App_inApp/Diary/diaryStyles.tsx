@@ -177,24 +177,17 @@ export const paperStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 15,
   },
-  modalScrollView: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 500,
+  modalContentContainer: {
+    width: '100%',
+    maxHeight: '90%',
     backgroundColor: '#fffef7',
-    borderRadius: 5,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  modalInnerContent: {
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
   modalTitle: {
     fontSize: 20,
@@ -316,9 +309,9 @@ export const generateInkBlots = (count = 5) => {
 
 const POSITION_ABSOLUTE = 'absolute';
 
-export const inkBlotStyle = (blot) => {
+export const inkBlotStyle = (blot: any) => {
   return {
-    position: POSITION_ABSOLUTE,
+    position: POSITION_ABSOLUTE as 'absolute',
     width: blot.size,
     height: blot.size,
     left: `${blot.left}%`,
