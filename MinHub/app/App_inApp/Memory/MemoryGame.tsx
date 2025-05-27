@@ -1,4 +1,3 @@
-import { addWeeks } from 'date-fns';
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -12,6 +11,7 @@ import {
   Switch,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NUM_PAIRS_EASY = 6;
 const NUM_PAIRS_MEDIUM = 8;
@@ -43,6 +43,7 @@ export default function MemoryGame() {
   const [gameOver, setGameOver] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState<number>(TIMED_MODE_DURATION);
+  const [startTime, setStartTime] = useState<number>(0);
   const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -66,7 +67,10 @@ export default function MemoryGame() {
     setCards(shuffled);
     if (gameMode === 'timed') {
       setTimeLeft(TIMED_MODE_DURATION);
-      timerWidthAnim.setValue(1); // Reset width
+      timerWidthAnim.setValue(1);
+    }
+    if (gameMode === 'classic') {
+      setStartTime(Date.now());
     }
   };
 
@@ -91,14 +95,11 @@ export default function MemoryGame() {
             if (newLives <= 0) {
               setGameOver(true);
               clearInterval(timerRef.current!);
-              Alert.alert(
-                'Game Over',
-                `You ran out of lives!\nYour Score: ${score}`,
-                [
-                  { text: 'Retry', onPress: () => resetGame() },
-                  { text: 'Cancel', style: 'cancel' }
-                ]
-              );
+              updateStats(false, 0);
+              Alert.alert('Game Over', `You ran out of lives!\nYour Score: ${score}`, [
+                { text: 'Retry', onPress: () => resetGame() },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
             }
             return newLives;
           });
@@ -111,6 +112,8 @@ export default function MemoryGame() {
     if (matchedIndices.length === cards.length && cards.length > 0) {
       clearInterval(timerRef.current!);
       if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const duration = (Date.now() - startTime) / 1000;
+      updateStats(true, duration);
       Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
     }
   }, [matchedIndices]);
@@ -124,14 +127,11 @@ export default function MemoryGame() {
             clearInterval(timerRef.current!);
             setGameOver(true);
             if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert(
-              'Time Up!',
-              `You ran out of time!\nYour Score: ${score}`,
-              [
-                { text: 'Retry', onPress: () => resetGame() },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            );
+            updateStats(false, 0);
+            Alert.alert('Time Up!', `You ran out of time!\nYour Score: ${score}`, [
+              { text: 'Retry', onPress: () => resetGame() },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
             return 0;
           }
           return prev - 1;
@@ -157,6 +157,36 @@ export default function MemoryGame() {
     ) {
       setFlippedIndices(prev => [...prev, index]);
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const updateStats = async (won: boolean, timeTaken: number) => {
+    try {
+      const raw = await AsyncStorage.getItem('memory_stats');
+      const stats = raw ? JSON.parse(raw) : { gamesPlayed: 0, gamesWon: 0, totalTime: 0 };
+      stats.gamesPlayed += 1;
+      if (won) {
+        stats.gamesWon += 1;
+        stats.totalTime += timeTaken;
+      }
+      await AsyncStorage.setItem('memory_stats', JSON.stringify(stats));
+    } catch (e) {
+      console.error('Failed to save stats:', e);
+    }
+  };
+
+  const showStats = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('memory_stats');
+      const stats = raw ? JSON.parse(raw) : { gamesPlayed: 0, gamesWon: 0, totalTime: 0 };
+      const avgTime =
+        stats.gamesWon > 0 ? (stats.totalTime / stats.gamesWon).toFixed(2) : 'N/A';
+      Alert.alert(
+        'Statistics',
+        `Games Played: ${stats.gamesPlayed}\nGames Won: ${stats.gamesWon}\nAvg Time (Classic Wins): ${avgTime}s`
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load statistics.');
     }
   };
 
@@ -189,14 +219,14 @@ export default function MemoryGame() {
             key={mode}
             style={[
               styles.difficultyButton,
-              gameMode === mode && styles.selectedButton
+              gameMode === mode && styles.selectedButton,
             ]}
             onPress={() => setGameMode(mode)}
           >
             <Text
               style={[
                 styles.difficultyText,
-                gameMode === mode && styles.selectedText
+                gameMode === mode && styles.selectedText,
               ]}
             >
               {mode.toUpperCase()}
@@ -211,14 +241,14 @@ export default function MemoryGame() {
             key={mode}
             style={[
               styles.difficultyButton,
-              difficulty === mode && styles.selectedButton
+              difficulty === mode && styles.selectedButton,
             ]}
             onPress={() => setDifficulty(mode)}
           >
             <Text
               style={[
                 styles.difficultyText,
-                difficulty === mode && styles.selectedText
+                difficulty === mode && styles.selectedText,
               ]}
             >
               {mode.toUpperCase()}
@@ -253,6 +283,10 @@ export default function MemoryGame() {
 
       <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
         <Text style={styles.resetText}>Restart</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.statsButton} onPress={showStats}>
+        <Text style={styles.resetText}>Statistics</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -349,6 +383,13 @@ const styles = StyleSheet.create({
   resetButton: {
     marginTop: 20,
     backgroundColor: '#607d8b',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  statsButton: {
+    marginTop: 10,
+    backgroundColor: '#9c27b0',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
