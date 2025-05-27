@@ -16,13 +16,21 @@ function ThemedStack() {
       <Stack.Screen name="tutorial" options={{ headerShown: false }} />
       <Stack.Screen name="questionnaire" options={{ headerShown: false }} />
       <Stack.Screen
+        name="enter-pin"
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
         name="home"
         options={({ navigation }) => ({
           headerShown: true,
-          title: t('home.defaultTitle'),
+          title: t('home.defaultTitle', { defaultValue: 'MinHub Home'}),
           headerStyle: { backgroundColor: theme.primary },
           headerTintColor: headerTintColor,
           headerTitleStyle: { fontWeight: 'bold', color: headerTintColor },
+          headerLeft: () => null,
           headerRight: () => (
             <TouchableOpacity
               onPress={() => navigation.navigate('settings')}
@@ -36,7 +44,7 @@ function ThemedStack() {
       <Stack.Screen
         name="settings"
         options={{
-          headerShown: true, title: t('settings.title'), presentation: 'modal',
+          headerShown: true, title: t('settings.title', { defaultValue: 'Settings' }), presentation: 'modal',
           headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
@@ -44,7 +52,7 @@ function ThemedStack() {
       <Stack.Screen
         name="notification-settings"
         options={{
-          title: t('notificationSettings.title'), headerShown: true,
+          title: t('notificationSettings.title', { defaultValue: 'Notification Settings' }), headerShown: true,
           headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
@@ -52,7 +60,7 @@ function ThemedStack() {
       <Stack.Screen
         name="edit-profile"
         options={{
-          title: t('editProfile.title'), headerShown: true,
+          title: t('editProfile.title', { defaultValue: 'Edit Profile' }), headerShown: true,
           headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
@@ -60,7 +68,7 @@ function ThemedStack() {
        <Stack.Screen
         name="language-settings"
         options={{
-          title: t('languages.select'), headerShown: true,
+          title: t('languages.select', { defaultValue: 'Select Language' }), headerShown: true,
           headerStyle: { backgroundColor: theme.card }, headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
         }}
@@ -68,9 +76,9 @@ function ThemedStack() {
       <Stack.Screen
         name="set-pin"
         options={{
-          title: 'Set PIN', 
+          title: t('setPin.title', { defaultValue: 'Set PIN' }),
           headerShown: true,
-          presentation: 'modal', 
+          presentation: 'modal',
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
           headerTitleStyle: { color: theme.text },
