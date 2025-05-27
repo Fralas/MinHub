@@ -2,9 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useI18n } from '../src/contexts/I18nContext';
-import { useTheme } from '../src/contexts/ThemeContext';
+import { ActivityIndicator, Alert, Image, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
@@ -12,11 +10,20 @@ const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 const PIN_LENGTH = 4;
 
+const purpleTheme = {
+  primary: '#9D50BB',
+  background: '#1D192C',
+  card: '#2C2541',
+  text: '#F5F5F5',
+  subtleText: '#A19CB0',
+  border: '#4A3F6D',
+  danger: '#E94560',
+  shadow: 'rgba(0, 0, 0, 0.4)',
+};
+
 export default function EnterPinScreen() {
-  const { theme } = useTheme();
-  const { t } = useI18n();
   const router = useRouter();
-  const styles = createThemedStyles(theme);
+  const styles = createThemedStyles(purpleTheme);
 
   const [pin, setPin] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -35,10 +42,7 @@ export default function EnterPinScreen() {
   };
 
   const handleSubmitPin = async (currentPin: string) => {
-    if (currentPin.length !== PIN_LENGTH) {
-      setErrorMessage(t('enterPin.pinLengthError', { length: PIN_LENGTH, defaultValue: `PIN must be ${PIN_LENGTH} digits.` }));
-      return;
-    }
+    if (currentPin.length !== PIN_LENGTH) return;
 
     setIsLoading(true);
     try {
@@ -46,24 +50,23 @@ export default function EnterPinScreen() {
       if (storedPin === currentPin) {
         setErrorMessage('');
         setAttempts(0);
-        setTimeout(() => router.replace('/home'), 0);
+        router.replace('/home');
       } else {
         setAttempts(prevAttempts => prevAttempts + 1);
         if (attempts + 1 >= MAX_ATTEMPTS) {
-          setErrorMessage(t('enterPin.maxAttemptsReached', { defaultValue: 'Maximum attempts reached. Logging out...' }));
           Alert.alert(
-            t('enterPin.tooManyAttemptsTitle', { defaultValue: 'Too Many Incorrect Attempts' }),
-            t('enterPin.tooManyAttemptsMessage', { defaultValue: 'You have exceeded the maximum number of attempts. For your security, you will be logged out.' }),
-            [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: handleLogout }]
+            'Too Many Incorrect Attempts',
+            'For your security, you will be logged out.',
+            [{ text: 'OK', onPress: handleLogout }]
           );
         } else {
-          setErrorMessage(t('enterPin.incorrectPin', { defaultValue: 'Incorrect PIN. Please try again.' }));
+          setErrorMessage('Incorrect PIN. Please try again.');
         }
         setPin('');
       }
     } catch (error) {
       console.error("Failed to verify PIN", error);
-      setErrorMessage(t('enterPin.verificationError', { defaultValue: 'Error verifying PIN. Please try again.' }));
+      setErrorMessage('Error verifying PIN. Please try again.');
       setPin('');
     } finally {
       setIsLoading(false);
@@ -73,14 +76,12 @@ export default function EnterPinScreen() {
   const handleLogout = async () => {
     setIsLoading(true);
     try {
-      await AsyncStorage.removeItem(USER_PROFILE_KEY);
-      await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
-      await AsyncStorage.removeItem(PIN_ENABLED_KEY);
+      await AsyncStorage.multiRemove([USER_PROFILE_KEY, ONBOARDING_COMPLETED_KEY, PIN_ENABLED_KEY]);
       await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
       router.replace('/');
     } catch (error) {
       console.error("Error during logout from PIN screen:", error);
-      Alert.alert(t('errors.errorTitle', { defaultValue: 'Error' }), t('errors.logoutError', { defaultValue: 'Could not log out.' }));
+      Alert.alert('Error', 'Could not log out.');
     } finally {
       setIsLoading(false);
     }
@@ -88,18 +89,21 @@ export default function EnterPinScreen() {
 
   const handlePasswordRecovery = () => {
     Alert.alert(
-      t('enterPin.passwordRecoveryTitle', { defaultValue: "Password Recovery" }),
-      t('enterPin.passwordRecoveryMessage', { defaultValue: "Password recovery feature is not yet implemented." })
+      "Password Recovery",
+      "Password recovery feature is not yet implemented."
     );
   };
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: t('enterPin.screenTitle', { defaultValue: 'Enter PIN' }), headerShown: false }} />
+      <Stack.Screen options={{ title: 'Enter PIN', headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
-        <Text style={styles.title}>
-          {t('enterPin.enterYourPin', { defaultValue: 'Enter Your PIN' })}
-        </Text>
+        <Image 
+            source={require('../assets/images/lock/lock2.png')} 
+            style={styles.headerImage}
+        />
+        
+        <Text style={styles.title}>Enter Your PIN</Text>
 
         <TextInput
           style={styles.input}
@@ -108,30 +112,21 @@ export default function EnterPinScreen() {
           keyboardType="number-pad"
           maxLength={PIN_LENGTH}
           secureTextEntry
-          placeholder="----"
-          placeholderTextColor={theme.subtleText}
+          placeholder="••••"
+          placeholderTextColor={purpleTheme.subtleText}
           autoFocus={true}
         />
 
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-        {isLoading && <ActivityIndicator size="large" color={theme.primary} style={styles.loadingIndicator} />}
+        {isLoading && <ActivityIndicator size="large" color={purpleTheme.primary} style={{ marginVertical: 20 }} />}
 
         <View style={styles.buttonsContainer}>
-            <TouchableOpacity
-                style={[styles.button, styles.secondaryButton]}
-                onPress={handleLogout}
-                disabled={isLoading}
-            >
-                <Text style={[styles.buttonText, styles.secondaryButtonText]}>{t('settings.logout', { defaultValue: 'Logout' })}</Text>
+            <TouchableOpacity style={styles.linkButton} onPress={handlePasswordRecovery} disabled={isLoading}>
+                <Text style={styles.linkButtonText}>Forgot PIN?</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.button, styles.secondaryButton, styles.passwordRecoveryButton]}
-                onPress={handlePasswordRecovery}
-                disabled={isLoading}
-            >
-                <Text style={[styles.buttonText, styles.secondaryButtonText]}>{t('enterPin.recoverPassword', { defaultValue: 'Recover Password' })}</Text>
+            <TouchableOpacity style={styles.linkButton} onPress={handleLogout} disabled={isLoading}>
+                <Text style={styles.linkButtonText}>Logout</Text>
             </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -139,7 +134,7 @@ export default function EnterPinScreen() {
   );
 }
 
-const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
+const createThemedStyles = (theme: typeof purpleTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -151,6 +146,12 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       alignItems: 'center',
       paddingHorizontal: 30,
     },
+    headerImage: {
+        width: 200,
+        height: 200,
+        borderRadius: 25,
+        marginBottom: 40,
+    },
     title: {
       fontSize: 24,
       fontWeight: '600',
@@ -159,17 +160,17 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       textAlign: 'center',
     },
     input: {
-      width: '60%',
+      width: '70%',
       height: 60,
       backgroundColor: theme.card,
       color: theme.text,
       borderWidth: 1,
       borderColor: theme.border,
-      borderRadius: 10,
+      borderRadius: 15,
       paddingHorizontal: 20,
       fontSize: 28,
       textAlign: 'center',
-      letterSpacing: Platform.OS === 'ios' ? 15 : 10,
+      letterSpacing: Platform.OS === 'ios' ? 20 : 15,
       marginBottom: 20,
     },
     errorText: {
@@ -178,38 +179,20 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       textAlign: 'center',
       minHeight: 20,
     },
-    loadingIndicator: {
-        marginVertical: 20,
-    },
     buttonsContainer: {
         position: 'absolute',
-        bottom: 40,
+        bottom: 50,
         width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
         alignItems: 'center',
     },
-    button: {
-      backgroundColor: theme.primary,
-      paddingVertical: 15,
-      paddingHorizontal: 30,
-      borderRadius: 25,
-      alignItems: 'center',
-      width: '80%',
-      marginBottom: 15,
+    linkButton: {
+        padding: 10,
     },
-    buttonText: {
-      color: theme.card,
-      fontSize: 18,
-      fontWeight: 'bold',
-    },
-    secondaryButton: {
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        borderColor: theme.primary,
-    },
-    secondaryButtonText: {
-        color: theme.primary,
-    },
-    passwordRecoveryButton: {
-        borderColor: theme.subtleText,
-    },
+    linkButtonText: {
+        color: theme.subtleText,
+        fontSize: 16,
+        fontWeight: '500',
+    }
   });
