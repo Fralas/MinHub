@@ -55,7 +55,7 @@ const allAppFeatures: AppFeature[] = [
   { id: 'sleepHelper', name: 'Sleep Helper', href: '/App_inApp/SleepHelper/sleep-helper' },
   { id: 'earTraining', name: 'EarTraining', href: '/App_inApp/EarTraining/earTraining' },
   { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro' },
-  
+  { id: 'memory', name: 'Memory', href: '/App_inApp/Memory/MemoryGame' },
 ];
 
 function useUserProfile() {
@@ -107,7 +107,7 @@ export default function HomeScreen() {
         if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
           relevance = 10;
         }
-        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink')) {
+        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory')) {
           relevance = 10;
         }
         if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {

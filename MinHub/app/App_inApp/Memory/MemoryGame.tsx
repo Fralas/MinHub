@@ -1,128 +1,270 @@
-import React, { useState, useEffect } from 'react';
+import { addWeeks } from 'date-fns';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Alert,
-  FlatList,
   Dimensions,
+  Alert,
+  ScrollView,
+  Animated,
+  Switch,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
-const CARD_PAIRS = {
-  Easy: 4,
-  Medium: 8,
-  Hard: 12,
-};
+const NUM_PAIRS_EASY = 6;
+const NUM_PAIRS_MEDIUM = 8;
+const NUM_PAIRS_HARD = 12;
+const MAX_LIVES = 5;
+const TIMED_MODE_DURATION = 60; // seconds
 
-const generateShuffledCards = (pairCount: number): { id: number; value: number; matched: boolean }[] => {
-  const values = Array.from({ length: pairCount }, (_, i) => i + 1);
-  const cards = [...values, ...values].map((value, index) => ({
-    id: index,
-    value,
-    matched: false,
-  }));
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const generateShuffledCards = (numPairs: number): number[] => {
+  const cards = [];
+  for (let i = 1; i <= numPairs; i++) {
+    cards.push(i);
+    cards.push(i);
+  }
   return cards.sort(() => Math.random() - 0.5);
 };
 
+type Difficulty = 'easy' | 'medium' | 'hard';
+type GameMode = 'classic' | 'timed';
+
 export default function MemoryGame() {
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Easy');
-  const [cards, setCards] = useState(() => generateShuffledCards(CARD_PAIRS[difficulty]));
-  const [flipped, setFlipped] = useState<number[]>([]);
-  const [matchedIds, setMatchedIds] = useState<number[]>([]);
-  const [moves, setMoves] = useState(0);
+  const [cards, setCards] = useState<number[]>([]);
+  const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
+  const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [lives, setLives] = useState<number>(MAX_LIVES);
+  const [gameOver, setGameOver] = useState<boolean>(false);
+  const [score, setScore] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number>(TIMED_MODE_DURATION);
+  const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
 
-  useEffect(() => {
-    setCards(generateShuffledCards(CARD_PAIRS[difficulty]));
-    setFlipped([]);
-    setMatchedIds([]);
-    setMoves(0);
-  }, [difficulty]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerWidthAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    if (flipped.length === 2) {
-      const [firstIdx, secondIdx] = flipped;
-      const firstCard = cards[firstIdx];
-      const secondCard = cards[secondIdx];
-      if (firstCard.value === secondCard.value) {
-        setMatchedIds(prev => [...prev, firstCard.id, secondCard.id]);
-        cards[firstIdx].matched = true;
-        cards[secondIdx].matched = true;
-      }
-      setTimeout(() => setFlipped([]), 700);
-      setMoves(prev => prev + 1);
+  const getNumPairs = (): number => {
+    switch (difficulty) {
+      case 'easy': return NUM_PAIRS_EASY;
+      case 'medium': return NUM_PAIRS_MEDIUM;
+      case 'hard': return NUM_PAIRS_HARD;
     }
-  }, [flipped]);
-
-  useEffect(() => {
-    if (matchedIds.length === cards.length && cards.length > 0) {
-      Alert.alert('You Win!', `You matched all pairs in ${moves} moves.`, [
-        { text: 'Play Again', onPress: () => setCards(generateShuffledCards(CARD_PAIRS[difficulty])) },
-      ]);
-    }
-  }, [matchedIds]);
-
-  const handleCardPress = (index: number) => {
-    if (flipped.length === 2 || flipped.includes(index) || matchedIds.includes(cards[index].id)) return;
-    setFlipped(prev => [...prev, index]);
   };
 
-  const numColumns = 4;
-  const { width } = Dimensions.get('window');
-  const cardSize = (width - 40) / numColumns - 10;
+  const resetGame = () => {
+    setMatchedIndices([]);
+    setFlippedIndices([]);
+    setLives(MAX_LIVES);
+    setScore(0);
+    setGameOver(false);
+    const shuffled = generateShuffledCards(getNumPairs());
+    setCards(shuffled);
+    if (gameMode === 'timed') {
+      setTimeLeft(TIMED_MODE_DURATION);
+      timerWidthAnim.setValue(1); // Reset width
+    }
+  };
+
+  useEffect(() => {
+    resetGame();
+  }, [difficulty, gameMode]);
+
+  useEffect(() => {
+    if (flippedIndices.length === 2) {
+      const [first, second] = flippedIndices;
+      if (cards[first] === cards[second]) {
+        setMatchedIndices(prev => [...prev, first, second]);
+        setScore(prev => prev + 100);
+        setFlippedIndices([]);
+        if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setTimeout(() => {
+          setFlippedIndices([]);
+          setLives(prev => {
+            const newLives = prev - 1;
+            if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            if (newLives <= 0) {
+              setGameOver(true);
+              clearInterval(timerRef.current!);
+              Alert.alert(
+                'Game Over',
+                `You ran out of lives!\nYour Score: ${score}`,
+                [
+                  { text: 'Retry', onPress: () => resetGame() },
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
+            }
+            return newLives;
+          });
+        }, 1000);
+      }
+    }
+  }, [flippedIndices]);
+
+  useEffect(() => {
+    if (matchedIndices.length === cards.length && cards.length > 0) {
+      clearInterval(timerRef.current!);
+      if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('You Win!', `All cards matched!\nScore: ${score}`);
+    }
+  }, [matchedIndices]);
+
+  useEffect(() => {
+    if (gameMode === 'timed') {
+      timerRef.current && clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            setGameOver(true);
+            if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert(
+              'Time Up!',
+              `You ran out of time!\nYour Score: ${score}`,
+              [
+                { text: 'Retry', onPress: () => resetGame() },
+                { text: 'Cancel', style: 'cancel' }
+              ]
+            );
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      Animated.timing(timerWidthAnim, {
+        toValue: 0,
+        duration: TIMED_MODE_DURATION * 1000,
+        useNativeDriver: false,
+      }).start();
+
+      return () => clearInterval(timerRef.current!);
+    }
+  }, [gameMode]);
+
+  const handleCardPress = (index: number) => {
+    if (
+      flippedIndices.length < 2 &&
+      !flippedIndices.includes(index) &&
+      !matchedIndices.includes(index) &&
+      !gameOver
+    ) {
+      setFlippedIndices(prev => [...prev, index]);
+      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const renderCard = (value: number, index: number) => {
+    const isFlipped = flippedIndices.includes(index) || matchedIndices.includes(index);
+    return (
+      <TouchableOpacity
+        key={index}
+        style={[styles.card, isFlipped && styles.flippedCard]}
+        onPress={() => handleCardPress(index)}
+        disabled={isFlipped || gameOver}
+      >
+        <Text style={styles.cardText}>{isFlipped ? value : '?'}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const animatedBarWidth = timerWidthAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Memory Game</Text>
 
-      <View style={styles.difficultySelector}>
-        {(['Easy', 'Medium', 'Hard'] as const).map(level => (
+      <View style={styles.modeContainer}>
+        {(['classic', 'timed'] as GameMode[]).map(mode => (
           <TouchableOpacity
-            key={level}
+            key={mode}
             style={[
               styles.difficultyButton,
-              difficulty === level && styles.difficultyButtonSelected,
+              gameMode === mode && styles.selectedButton
             ]}
-            onPress={() => setDifficulty(level)}
+            onPress={() => setGameMode(mode)}
           >
-            <Text style={difficulty === level ? styles.difficultyTextSelected : styles.difficultyText}>
-              {level}
+            <Text
+              style={[
+                styles.difficultyText,
+                gameMode === mode && styles.selectedText
+              ]}
+            >
+              {mode.toUpperCase()}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.moves}>Moves: {moves}</Text>
-
-      <FlatList
-        data={cards}
-        numColumns={numColumns}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.board}
-        renderItem={({ item, index }) => {
-          const isFlipped = flipped.includes(index) || matchedIds.includes(item.id);
-          return (
-            <TouchableOpacity
-              style={[styles.card, { width: cardSize, height: cardSize }, isFlipped && styles.cardFlipped]}
-              onPress={() => handleCardPress(index)}
-              activeOpacity={0.8}
+      <View style={styles.difficultyContainer}>
+        {(['easy', 'medium', 'hard'] as Difficulty[]).map(mode => (
+          <TouchableOpacity
+            key={mode}
+            style={[
+              styles.difficultyButton,
+              difficulty === mode && styles.selectedButton
+            ]}
+            onPress={() => setDifficulty(mode)}
+          >
+            <Text
+              style={[
+                styles.difficultyText,
+                difficulty === mode && styles.selectedText
+              ]}
             >
-              <Text style={styles.cardText}>{isFlipped ? item.value : '?'}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-    </SafeAreaView>
+              {mode.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.toggleContainer}>
+        <Text style={styles.infoText}>Haptics:</Text>
+        <Switch
+          value={hapticsEnabled}
+          onValueChange={setHapticsEnabled}
+          thumbColor={hapticsEnabled ? '#4caf50' : '#ccc'}
+        />
+      </View>
+
+      <Text style={styles.infoText}>
+        Lives: {lives} | Score: {score}
+        {gameMode === 'timed' && ` | Time Left: ${timeLeft}s`}
+      </Text>
+
+      {gameMode === 'timed' && (
+        <View style={styles.timerBarContainer}>
+          <Animated.View style={[styles.timerBar, { width: animatedBarWidth }]} />
+        </View>
+      )}
+
+      <View style={styles.grid}>
+        {cards.map((value, index) => renderCard(value, index))}
+      </View>
+
+      <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
+        <Text style={styles.resetText}>Restart</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
+const CARD_SIZE = SCREEN_WIDTH / 5;
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#F2F2F2',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingVertical: 20,
+    backgroundColor: '#ffffff',
   },
   title: {
     fontSize: 28,
@@ -130,54 +272,90 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#333',
   },
-  difficultySelector: {
+  difficultyContainer: {
     flexDirection: 'row',
-    marginVertical: 10,
+    marginBottom: 10,
+    gap: 8,
+  },
+  modeContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    gap: 8,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
   },
   difficultyButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginHorizontal: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#888',
-    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#ddd',
+    borderRadius: 6,
   },
-  difficultyButtonSelected: {
-    backgroundColor: '#3399FF',
-    borderColor: '#3399FF',
+  selectedButton: {
+    backgroundColor: '#4caf50',
   },
   difficultyText: {
+    fontWeight: '600',
+    color: '#333',
+  },
+  selectedText: {
+    color: '#fff',
+  },
+  infoText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
     color: '#444',
   },
-  difficultyTextSelected: {
-    color: '#fff',
-    fontWeight: 'bold',
+  timerBarContainer: {
+    height: 10,
+    width: '90%',
+    backgroundColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
-  moves: {
-    fontSize: 16,
-    color: '#666',
-    marginVertical: 5,
+  timerBar: {
+    height: '100%',
+    backgroundColor: '#f44336',
   },
-  board: {
-    paddingHorizontal: 10,
-    paddingBottom: 30,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
+    width: SCREEN_WIDTH,
+    padding: 5,
   },
   card: {
-    backgroundColor: '#cccccc',
+    width: CARD_SIZE - 10,
+    height: CARD_SIZE - 10,
     margin: 5,
-    borderRadius: 10,
-    justifyContent: 'center',
+    backgroundColor: '#90caf9',
     alignItems: 'center',
-    elevation: 2,
+    justifyContent: 'center',
+    borderRadius: 10,
   },
-  cardFlipped: {
-    backgroundColor: '#3399FF',
+  flippedCard: {
+    backgroundColor: '#64b5f6',
   },
   cardText: {
     fontSize: 24,
-    fontWeight: 'bold',
     color: '#fff',
+    fontWeight: 'bold',
+  },
+  resetButton: {
+    marginTop: 20,
+    backgroundColor: '#607d8b',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  resetText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
