@@ -25,7 +25,7 @@ function ThemedStack() {
       <Stack.Screen
         name="home"
         options={({ navigation }) => ({
-          headerShown: true,
+          headerShown: false,
           title: t('home.defaultTitle', { defaultValue: 'MinHub Home'}),
           headerStyle: { backgroundColor: theme.primary },
           headerTintColor: headerTintColor,

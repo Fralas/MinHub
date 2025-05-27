@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -13,11 +14,22 @@ const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
 const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
 
+const lightPurplePalette = {
+  primary: '#8A63D2',    
+  background: '#F5F3F9', 
+  card: '#FFFFFF',        
+  text: '#1A202C',        
+  subtleText: '#718096',  
+  border: '#E2E8F0',     
+  danger: '#E53E3E',      
+  iconBackground: '#EDE9F6', 
+};
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const { theme, isDark, setTheme } = useTheme();
+  const { isDark, setTheme } = useTheme(); 
   const { t } = useI18n();
-  const styles = createThemedStyles(theme);
+  const styles = createThemedStyles(lightPurplePalette);
 
   const [isPinEnabled, setIsPinEnabled] = useState(false);
   const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(true);
@@ -70,7 +82,7 @@ export default function SettingsScreen() {
     }
     
     scheduleLocalNotification(
-      "MinHub Test! 🚀",
+      "MinHub Test! �",
       "This notification should appear in 1 second.",
       { customData: "test_from_settings_main" },
       1
@@ -111,80 +123,80 @@ export default function SettingsScreen() {
   if (isLoadingPinStatus) {
     return (
         <View style={[styles.container, styles.loadingIndicatorContainer]}>
-            <ActivityIndicator size="large" color={theme.primary} />
+            <ActivityIndicator size="large" color={lightPurplePalette.primary} />
         </View>
     );
   }
 
+  const renderSettingRow = (iconName: keyof typeof Ionicons.glyphMap, text: string, onPress?: () => void, rightContent?: React.ReactNode) => (
+    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress}>
+      <View style={styles.rowLeft}>
+        <View style={styles.iconContainer}>
+          <Ionicons name={iconName} size={20} color={lightPurplePalette.primary} />
+        </View>
+        <Text style={styles.rowLabel}>{text}</Text>
+      </View>
+      {rightContent}
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView>
+        <ScrollView contentContainerStyle={styles.scrollViewContent}>
+            <Text style={styles.headerTitle}>Settings</Text>
+
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('settings.account')}</Text>
-            <TouchableOpacity style={styles.row} onPress={() => router.push('/edit-profile')}>
-                <Text style={styles.rowLabel}>{t('settings.editProfile')}</Text>
-                <Text style={styles.rowIcon}>›</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.row} onPress={handlePasswordRecovery}>
-                <Text style={styles.rowLabel}>{t('settings.passwordRecovery', {defaultValue: 'Password Recovery'})}</Text> 
-                <Text style={styles.rowIcon}>›</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.row} onPress={() => router.push('/notification-settings')}>
-                <Text style={styles.rowLabel}>{t('settings.notifications')}</Text>
-                <Text style={styles.rowIcon}>›</Text>
-            </TouchableOpacity>
+                <Text style={styles.sectionTitle}>{t('settings.account', { defaultValue: 'Account' })}</Text>
+                {renderSettingRow('person-outline', t('settings.editProfile'), () => router.push('/edit-profile'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
+                {renderSettingRow('key-outline', t('settings.passwordRecovery', {defaultValue: 'Password Recovery'}), handlePasswordRecovery, <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
+                {renderSettingRow('notifications-outline', t('settings.notifications'), () => router.push('/notification-settings'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t('settings.security', {defaultValue: 'Security'})}</Text>
-                <View style={styles.row}>
-                    <Text style={styles.rowLabel}>{t('settings.enablePin', {defaultValue: 'Enable PIN Lock'})}</Text>
-                    <Switch
-                        value={isPinEnabled}
-                        onValueChange={handleTogglePinSetting}
-                        trackColor={{ false: '#767577', true: theme.primary }}
-                        thumbColor={isPinEnabled ? theme.primary : '#f4f3f4'}
-                    />
-                </View>
+                {renderSettingRow('lock-closed-outline', t('settings.enablePin', {defaultValue: 'Enable PIN Lock'}), handleTogglePinSetting, 
+                  <Switch
+                      value={isPinEnabled}
+                      onValueChange={handleTogglePinSetting}
+                      trackColor={{ false: '#DCDFE6', true: lightPurplePalette.primary }}
+                      thumbColor={'#FFFFFF'}
+                      ios_backgroundColor="#DCDFE6"
+                  />
+                )}
             </View>
 
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('settings.appearance')}</Text>
-            <View style={styles.row}>
-                <Text style={styles.rowLabel}>{t('settings.darkMode')}</Text>
-                <Switch
-                value={isDark}
-                onValueChange={onToggleThemeSwitch}
-                trackColor={{ false: '#767577', true: theme.primary }}
-                thumbColor={isDark ? theme.primary : '#f4f3f4'}
-                />
-            </View>
-            <TouchableOpacity style={styles.row} onPress={() => router.push('/language-settings')}>
-                <Text style={styles.rowLabel}>{t('settings.language')}</Text>
-                <Text style={styles.rowIcon}>›</Text>
-            </TouchableOpacity>
+                <Text style={styles.sectionTitle}>{t('settings.appearance', {defaultValue: 'Appearance'})}</Text>
+                {renderSettingRow('moon-outline', t('settings.darkMode'), onToggleThemeSwitch, 
+                  <Switch
+                    value={isDark}
+                    onValueChange={onToggleThemeSwitch}
+                    trackColor={{ false: '#DCDFE6', true: lightPurplePalette.primary }}
+                    thumbColor={'#FFFFFF'}
+                    ios_backgroundColor="#DCDFE6"
+                  />
+                )}
+                {renderSettingRow('language-outline', t('settings.language'), () => router.push('/language-settings'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
             </View>
 
             <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('settings.testing')}</Text>
-            <TouchableOpacity style={styles.row} onPress={handleSendTestNotification}>
-                <Text style={styles.rowLabel}>{t('settings.sendTestNotification')}</Text>
-            </TouchableOpacity>
+                <Text style={styles.sectionTitle}>{t('settings.testing', {defaultValue: 'Testing'})}</Text>
+                {renderSettingRow('send-outline', t('settings.sendTestNotification'), handleSendTestNotification)}
             </View>
-
-            <View style={styles.section}>
+            
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Ionicons name="log-out-outline" size={22} color={lightPurplePalette.danger} />
                 <Text style={styles.logoutButtonText}>{t('settings.logout')}</Text>
             </TouchableOpacity>
-            </View>
+
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
-const createThemedStyles = (theme: import('../src/styles/themes').Theme) => 
+const createThemedStyles = (theme: typeof lightPurplePalette) => 
   StyleSheet.create({
     container: {
       flex: 1,
@@ -193,51 +205,87 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
     safeArea: {
       flex: 1,
     },
+    scrollViewContent: {
+      paddingBottom: 30,
+    },
+    headerTitle: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: theme.text,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 10,
+    },
     loadingIndicatorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: theme.background,
     },
     section: {
-      marginTop: 20,
+      marginTop: 16,
       marginHorizontal: 16,
       backgroundColor: theme.card,
-      borderRadius: 12,
+      borderRadius: 16,
       overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 3,
     },
     sectionTitle: {
       fontSize: 14,
       fontWeight: '600',
       color: theme.subtleText,
-      paddingTop: 12,
-      paddingBottom: 4,
-      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 8,
+      paddingHorizontal: 20,
+      textTransform: 'uppercase',
     },
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.border,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.background,
+    },
+    rowLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    iconContainer: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.iconBackground,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 16,
     },
     rowLabel: {
-      fontSize: 17,
+      fontSize: 16,
       color: theme.text,
     },
     rowIcon: {
-      fontSize: 20,
       color: theme.subtleText,
     },
     logoutButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 16,
+      marginTop: 30,
       backgroundColor: theme.card,
       paddingVertical: 14,
-      alignItems: 'center',
+      borderRadius: 16,
     },
     logoutButtonText: {
-      fontSize: 17,
+      fontSize: 16,
       color: theme.danger,
-      fontWeight: '500',
+      fontWeight: '600',
+      marginLeft: 8,
     },
   });

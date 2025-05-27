@@ -2,17 +2,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useTheme } from '../src/contexts/ThemeContext';
+import { ActivityIndicator, Alert, Image, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
-const PIN_LENGTH = 4; 
+const PIN_LENGTH = 4;
+
+const purpleTheme = {
+  primary: '#9D50BB',
+  background: '#1D192C',
+  card: '#2C2541',
+  text: '#F5F5F5',
+  subtleText: '#A19CB0',
+  border: '#4A3F6D',
+  danger: '#E94560',
+  shadow: 'rgba(0, 0, 0, 0.4)',
+};
 
 export default function SetPinScreen() {
-  const { theme } = useTheme();
   const router = useRouter();
-  const styles = createThemedStyles(theme);
+  const styles = createThemedStyles(purpleTheme);
 
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
   const [pin, setPin] = useState('');
@@ -70,8 +79,13 @@ export default function SetPinScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: step === 'enter' ? 'Set New PIN' : 'Confirm PIN' }} />
+      <Stack.Screen options={{ title: step === 'enter' ? 'Set New PIN' : 'Confirm PIN', headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
+        <Image 
+            source={require('../assets/images/lock/lock1.png')} 
+            style={styles.headerImage}
+        />
+        
         <Text style={styles.title}>
           {step === 'enter' ? `Enter a ${PIN_LENGTH}-digit PIN` : 'Confirm Your PIN'}
         </Text>
@@ -83,19 +97,19 @@ export default function SetPinScreen() {
           keyboardType="number-pad"
           maxLength={PIN_LENGTH}
           secureTextEntry
-          placeholder={step === 'enter' ? 'Enter PIN' : 'Confirm PIN'}
-          placeholderTextColor={theme.subtleText}
+          placeholder="••••"
+          placeholderTextColor={purpleTheme.subtleText}
         />
 
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
         <TouchableOpacity
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={[styles.button, (isLoading || (step === 'enter' && pin.length !== PIN_LENGTH) || (step === 'confirm' && confirmPin.length !== PIN_LENGTH)) && styles.buttonDisabled]}
           onPress={handleSubmitPin}
           disabled={isLoading || (step === 'enter' && pin.length !== PIN_LENGTH) || (step === 'confirm' && confirmPin.length !== PIN_LENGTH)}
         >
           {isLoading ? (
-            <ActivityIndicator color={theme.card} />
+            <ActivityIndicator color={purpleTheme.background} />
           ) : (
             <Text style={styles.buttonText}>{step === 'enter' ? 'Next' : 'Set PIN'}</Text>
           )}
@@ -103,16 +117,16 @@ export default function SetPinScreen() {
 
         {step === 'confirm' && (
             <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={() => {
-                setStep('enter');
-                setPin('');
-                setConfirmPin('');
-                setErrorMessage('');
-            }}
-            disabled={isLoading}
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => {
+                  setStep('enter');
+                  setPin('');
+                  setConfirmPin('');
+                  setErrorMessage('');
+              }}
+              disabled={isLoading}
             >
-            <Text style={styles.cancelButtonText}>Back to Enter PIN</Text>
+              <Text style={styles.cancelButtonText}>Back</Text>
             </TouchableOpacity>
         )}
       </SafeAreaView>
@@ -120,7 +134,7 @@ export default function SetPinScreen() {
   );
 }
 
-const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
+const createThemedStyles = (theme: typeof purpleTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -132,53 +146,68 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       alignItems: 'center',
       paddingHorizontal: 30,
     },
+    headerImage: {
+        width: 210,
+        height: 210,
+        marginBottom: 40,
+    },
     title: {
-      fontSize: 22,
+      fontSize: 24,
       fontWeight: '600',
       color: theme.text,
       marginBottom: 30,
       textAlign: 'center',
     },
     input: {
-      width: '80%',
-      height: 50,
+      width: '70%',
+      height: 60,
       backgroundColor: theme.card,
       color: theme.text,
       borderWidth: 1,
       borderColor: theme.border,
-      borderRadius: 10,
+      borderRadius: 15,
       paddingHorizontal: 20,
-      fontSize: 20,
+      fontSize: 28,
       textAlign: 'center',
-      letterSpacing: Platform.OS === 'ios' ? 10 : 5,
+      letterSpacing: Platform.OS === 'ios' ? 20 : 15,
       marginBottom: 20,
     },
     errorText: {
       color: theme.danger,
       marginBottom: 20,
       textAlign: 'center',
+      minHeight: 20,
     },
     button: {
       backgroundColor: theme.primary,
-      paddingVertical: 15,
+      paddingVertical: 18,
       paddingHorizontal: 30,
-      borderRadius: 25,
+      borderRadius: 30,
       alignItems: 'center',
       width: '80%',
       marginBottom: 15,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.5,
+      shadowRadius: 5,
+      elevation: 8,
     },
     buttonDisabled: {
       backgroundColor: theme.subtleText,
+      elevation: 0,
+      shadowOpacity: 0,
     },
     buttonText: {
-      color: theme.card,
+      color: theme.background,
       fontSize: 18,
       fontWeight: 'bold',
     },
     cancelButton: {
         backgroundColor: 'transparent',
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: theme.subtleText,
+        elevation: 0,
+        shadowOpacity: 0,
     },
     cancelButtonText: {
         color: theme.subtleText,
