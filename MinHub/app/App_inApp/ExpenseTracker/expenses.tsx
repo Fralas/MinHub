@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TextInput, Button } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Modal,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Expense {
@@ -14,6 +22,7 @@ export default function ExpensesScreen() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     const loadExpenses = async () => {
@@ -36,54 +45,151 @@ export default function ExpensesScreen() {
     setAmount('');
     setCategory('');
     setNote('');
+    setModalVisible(false);
+  };
+
+  const deleteExpense = async (indexToDelete: number) => {
+    const updated = expenses.filter((_, index) => index !== indexToDelete);
+    setExpenses(updated);
+    await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
   };
 
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Expense Tracker</Text>
-      <Text>Total Spent: ${totalSpent.toFixed(2)}</Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.header}>Total expense: ${totalSpent.toFixed(2)}</Text>
+        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
+      </View>
 
-      <TextInput
-        placeholder="Amount"
-        keyboardType="numeric"
-        value={amount}
-        onChangeText={setAmount}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Category"
-        value={category}
-        onChangeText={setCategory}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Note"
-        value={note}
-        onChangeText={setNote}
-        style={styles.input}
-      />
-      <Button title="Add Expense" onPress={addExpense} />
+      <View style={styles.tableHeader}>
+        <Text style={styles.tableCell}>Title</Text>
+        <Text style={styles.tableCell}>Date</Text>
+        <Text style={styles.tableCell}>Category</Text>
+        <Text style={[styles.tableCell, { flex: 0.8 }]}>Actions</Text>
+      </View>
 
       <FlatList
         data={expenses}
         keyExtractor={(_, index) => index.toString()}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <View style={styles.expenseItem}>
-            <Text>{item.timestamp}</Text>
-            <Text>${item.amount.toFixed(2)} - {item.category}</Text>
-            {item.note ? <Text>Note: {item.note}</Text> : null}
+            <Text style={styles.tableCell}>{item.note || 'No title'}</Text>
+            <Text style={styles.tableCell}>{item.timestamp}</Text>
+            <Text style={styles.tableCell}>{item.category}</Text>
+            <Text style={styles.amountText}>${item.amount.toFixed(2)}</Text>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => deleteExpense(index)}
+            >
+              <Text style={styles.deleteButtonText}>🗑</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
+
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <TextInput
+              placeholder="Amount"
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Category"
+              value={category}
+              onChangeText={setCategory}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Note (Title)"
+              value={note}
+              onChangeText={setNote}
+              style={styles.input}
+            />
+            <TouchableOpacity onPress={addExpense} style={styles.saveButton}>
+              <Text style={styles.saveButtonText}>Add Expense</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={{ color: 'red', marginTop: 10 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-  input: { borderWidth: 1, padding: 8, marginBottom: 10 },
-  expenseItem: { marginBottom: 10, borderBottomWidth: 1, paddingBottom: 5 },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  header: { fontSize: 24, fontWeight: 'bold' },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007bff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  tableHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    marginTop: 20,
+  },
+  tableCell: { flex: 1, fontWeight: 'bold' },
+  expenseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 0.5,
+    alignItems: 'center',
+  },
+  amountText: { flex: 1, textAlign: 'right', fontWeight: 'bold' },
+  deleteButton: {
+    backgroundColor: '#ff4d4d',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  deleteButtonText: { color: 'white', fontWeight: 'bold' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#000000aa',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+  },
+  input: {
+    borderWidth: 1,
+    padding: 8,
+    marginBottom: 10,
+    borderRadius: 6,
+  },
+  saveButton: {
+    backgroundColor: '#007bff',
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  saveButtonText: { color: 'white', fontWeight: 'bold' },
 });
