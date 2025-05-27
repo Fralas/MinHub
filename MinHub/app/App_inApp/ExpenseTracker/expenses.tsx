@@ -23,6 +23,8 @@ export default function ExpensesScreen() {
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterDate, setFilterDate] = useState('');
 
   useEffect(() => {
     const loadExpenses = async () => {
@@ -56,6 +58,15 @@ export default function ExpensesScreen() {
 
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
+  const filteredExpenses = expenses.filter(exp => {
+    const categoryMatch =
+      filterCategory === '' ||
+      exp.category.toLowerCase().includes(filterCategory.toLowerCase());
+    const dateMatch =
+      filterDate === '' || exp.timestamp.includes(filterDate);
+    return categoryMatch && dateMatch;
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -65,6 +76,25 @@ export default function ExpensesScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Filters */}
+      <View style={{ flexDirection: 'row', marginTop: 10, marginBottom: 10 }}>
+        <TextInput
+          placeholder="Filter by category"
+          value={filterCategory}
+          onChangeText={setFilterCategory}
+          style={[styles.input, { flex: 1, marginRight: 5 }]}
+        />
+        <TextInput
+          placeholder="Filter by date (e.g., 5/27/2025)"
+          value={filterDate}
+          onChangeText={setFilterDate}
+          style={[styles.input, { flex: 1 }]}
+        />
+      </View>
+      <TouchableOpacity onPress={() => { setFilterCategory(''); setFilterDate(''); }}>
+        <Text style={{ color: '#007bff', marginBottom: 10 }}>Clear Filters</Text>
+      </TouchableOpacity>
+
       <View style={styles.tableHeader}>
         <Text style={styles.tableCell}>Title</Text>
         <Text style={styles.tableCell}>Date</Text>
@@ -73,7 +103,7 @@ export default function ExpensesScreen() {
       </View>
 
       <FlatList
-        data={expenses}
+        data={filteredExpenses}
         keyExtractor={(_, index) => index.toString()}
         renderItem={({ item, index }) => (
           <View style={styles.expenseItem}>
