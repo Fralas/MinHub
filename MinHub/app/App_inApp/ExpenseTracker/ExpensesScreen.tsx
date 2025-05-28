@@ -9,44 +9,89 @@ import {
   Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
+import RecurringExpenseModal from './RecurringExpenseModal';
 
 interface Expense {
   amount: number;
   category: string;
   note: string;
   timestamp: string;
+  recurring?: boolean;
+  lastGenerated?: string;
 }
+
+const predefinedCategories = ['Food', 'Shopping', 'Trips', 'Transport', 'Health', 'Entertainment', 'Other'];
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [note, setNote] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('Food');
+  const [note, setNote] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+
   useEffect(() => {
     const loadExpenses = async () => {
       const stored = await AsyncStorage.getItem('expenseHistory');
-      if (stored) setExpenses(JSON.parse(stored));
+      if (stored) {
+        const parsed: Expense[] = JSON.parse(stored);
+        const updated = generateRecurringExpenses(parsed);
+        setExpenses(updated);
+        if (updated.length !== parsed.length) {
+          await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
+        }
+      }
     };
     loadExpenses();
   }, []);
 
+  const generateRecurringExpenses = (data: Expense[]) => {
+    const now = new Date();
+    const updatedData = [...data];
+    const recurringItems = data.filter(exp => exp.recurring);
+
+    for (const exp of recurringItems) {
+      const last = exp.lastGenerated ? new Date(exp.lastGenerated) : new Date(exp.timestamp);
+      const diffDays = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 30) {
+        const newExpense: Expense = {
+          ...exp,
+          timestamp: new Date().toLocaleString(),
+          lastGenerated: new Date().toISOString(),
+        };
+        updatedData.unshift(newExpense);
+
+        const originalIndex = updatedData.findIndex(
+          e => e.timestamp === exp.timestamp && e.note === exp.note && e.amount === exp.amount
+        );
+        if (originalIndex !== -1) {
+          updatedData[originalIndex].lastGenerated = new Date().toISOString();
+        }
+      }
+    }
+    return updatedData;
+  };
+
   const addExpense = async () => {
     const newExpense: Expense = {
       amount: parseFloat(amount),
-      category: category.trim() || 'Other',
+      category: category || 'Other',
       note,
       timestamp: new Date().toLocaleString(),
+      recurring: isRecurring,
+      lastGenerated: isRecurring ? new Date().toISOString() : undefined,
     };
     const updated = [newExpense, ...expenses];
     setExpenses(updated);
     await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
     setAmount('');
-    setCategory('');
+    setCategory('Food');
     setNote('');
+    setIsRecurring(false);
     setModalVisible(false);
   };
 
@@ -76,7 +121,6 @@ export default function ExpensesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Filters */}
       <View style={{ flexDirection: 'row', marginTop: 10, marginBottom: 10 }}>
         <TextInput
           placeholder="Filter by category"
@@ -109,7 +153,10 @@ export default function ExpensesScreen() {
           <View style={styles.expenseItem}>
             <Text style={styles.tableCell}>{item.note || 'No title'}</Text>
             <Text style={styles.tableCell}>{item.timestamp}</Text>
-            <Text style={styles.tableCell}>{item.category}</Text>
+            <Text style={styles.tableCell}>
+              {item.category}
+              {item.recurring ? ' 🔁' : ''}
+            </Text>
             <Text style={styles.amountText}>${item.amount.toFixed(2)}</Text>
             <TouchableOpacity
               style={styles.deleteButton}
@@ -121,37 +168,19 @@ export default function ExpensesScreen() {
         )}
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <TextInput
-              placeholder="Amount"
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Category"
-              value={category}
-              onChangeText={setCategory}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Note (Title)"
-              value={note}
-              onChangeText={setNote}
-              style={styles.input}
-            />
-            <TouchableOpacity onPress={addExpense} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>Add Expense</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={{ color: 'red', marginTop: 10 }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <RecurringExpenseModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onAdd={addExpense}
+        amount={amount}
+        setAmount={setAmount}
+        category={category}
+        setCategory={setCategory}
+        note={note}
+        setNote={setNote}
+        isRecurring={isRecurring}
+        setIsRecurring={setIsRecurring}
+      />
     </View>
   );
 }
@@ -197,29 +226,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   deleteButtonText: { color: 'white', fontWeight: 'bold' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: '#000000aa',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    width: '80%',
-  },
   input: {
     borderWidth: 1,
     padding: 8,
     marginBottom: 10,
     borderRadius: 6,
   },
-  saveButton: {
-    backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  saveButtonText: { color: 'white', fontWeight: 'bold' },
 });

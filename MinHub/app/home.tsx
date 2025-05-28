@@ -72,6 +72,8 @@ const allAppFeatures: AppFeature[] = [
   { id: 'earTraining', name: 'EarTraining', href: '/App_inApp/EarTraining/earTraining', iconName: 'musical-notes-outline' },
   { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro', iconName: 'timer-outline' },
   { id: 'memory', name: 'Memory', href: '/App_inApp/Memory/MemoryGame', iconName: 'game-controller-outline' },
+  { id: 'expense', name: 'Expense Tracker', href: '/App_inApp/ExpenseTracker/expenses',  },
+
 ];
 
 function useAppInitialData() {
