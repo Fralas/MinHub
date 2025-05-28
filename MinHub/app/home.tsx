@@ -16,6 +16,7 @@ import {
 
 const { width: screenWidth } = Dimensions.get('window');
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
+const REVERSE_DASHBOARD_ORDER_KEY = 'minhub_reverse_dashboard_order';
 
 interface UserProfile {
   age: string;
@@ -73,71 +74,78 @@ const allAppFeatures: AppFeature[] = [
   { id: 'memory', name: 'Memory', href: '/App_inApp/Memory/MemoryGame', iconName: 'game-controller-outline' },
 ];
 
-function useUserProfile() {
+function useAppInitialData() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isDashboardOrderReversed, setIsDashboardOrderReversed] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-      const loadUserProfile = async () => {
-        setIsLoadingProfile(true);
+      const loadData = async () => {
+        setIsLoadingData(true);
         try {
           const profileDataString = await AsyncStorage.getItem(USER_PROFILE_KEY);
-          if (isActive && profileDataString) {
+          if (profileDataString) {
             setUserProfile(JSON.parse(profileDataString));
-          } else if (isActive) {
+          } else {
             setUserProfile(null);
           }
+
+          const reverseOrderSetting = await AsyncStorage.getItem(REVERSE_DASHBOARD_ORDER_KEY);
+          setIsDashboardOrderReversed(reverseOrderSetting === 'true');
+
         } catch (error) {
-          if (isActive) setUserProfile(null);
-          console.error('Failed to load user profile data on focus:', error);
+          console.error('Failed to load app initial data:', error);
+          setUserProfile(null);
+          setIsDashboardOrderReversed(false);
         } finally {
-          if (isActive) setIsLoadingProfile(false);
+          setIsLoadingData(false);
         }
       };
 
-      loadUserProfile();
-
-      return () => {
-        isActive = false;
-      };
+      loadData();
     }, [])
   );
 
-  return { userProfile, isLoadingProfile };
+  return { userProfile, isDashboardOrderReversed, isLoadingData };
 }
 
 export default function HomeScreen() {
-  const { userProfile, isLoadingProfile } = useUserProfile();
+  const { userProfile, isDashboardOrderReversed, isLoadingData } = useAppInitialData();
   const router = useRouter();
   const styles = createThemedStyles(lightPurplePalette);
 
   const personalizedFeatures = useMemo(() => {
-    if (!userProfile) {
-      return allAppFeatures;
-    }
-    return [...allAppFeatures]
-      .map(feature => {
-        let relevance = 0;
-        if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
-          relevance = 10;
-        }
-        if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory')) {
-          relevance = 10;
-        }
-        if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {
-          relevance = 10;
-        }
-        if (userProfile.hobbies.includes('🍳 Cooking') && (feature.id === 'foodScheduler' || feature.id === 'shoppingList')) {
-            relevance = 8;
-        }
-        return { ...feature, relevance };
-      })
-      .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-  }, [userProfile]);
+    let features = [...allAppFeatures]; 
 
-  if (isLoadingProfile) {
+    if (userProfile) {
+      features = features
+        .map(feature => {
+          let relevance = 0;
+          if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
+            relevance = 10;
+          }
+          if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory')) {
+            relevance = 10;
+          }
+          if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {
+            relevance = 10;
+          }
+          if (userProfile.hobbies.includes('🍳 Cooking') && (feature.id === 'foodScheduler' || feature.id === 'shoppingList')) {
+              relevance = 8;
+          }
+          return { ...feature, relevance };
+        })
+        .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
+    }
+    
+    if (isDashboardOrderReversed) {
+      return features.reverse();
+    }
+    return features;
+  }, [userProfile, isDashboardOrderReversed]);
+
+  if (isLoadingData) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={lightPurplePalette.primary} />
@@ -147,12 +155,19 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
-      {/* Header personalizzato */}
       <View style={styles.customHeader}>
         <View style={{ width: 40 }} /> 
-        <Text style={styles.title}>
-          {userProfile?.accountName ? `Welcome, ${userProfile.accountName}!` : 'MinHub Home'}
-        </Text>
+        <View style={styles.titleContainer}>
+          {userProfile?.accountName ? (
+            <Text style={styles.welcomeTitle}>
+              Welcome, {userProfile.accountName}!
+            </Text>
+          ) : (
+            <Text style={styles.defaultHomeTitle}> 
+              MinHub Home
+            </Text>
+          )}
+        </View>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
            <Ionicons name="settings-outline" size={28} color={lightPurplePalette.primary} />
         </TouchableOpacity>
@@ -181,7 +196,8 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
   const horizontalPaddingTotalForGrid = 32;
   const gapBetweenItems = 16;
   const itemWidth = (screenWidth - horizontalPaddingTotalForGrid - (gapBetweenItems * (numColumns - 1))) / numColumns;
-  const headerHeight = Platform.OS === 'android' ? 140 : 120;
+  const headerHeight = Platform.OS === 'android' ? 110 : 100;
+
   return StyleSheet.create({
     safeAreaContainer: {
       flex: 1,
@@ -193,7 +209,7 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: 16,
-      backgroundColor: theme.headerBackground, 
+      backgroundColor: theme.headerBackground,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
       shadowColor: '#000',
@@ -212,15 +228,24 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
       alignItems: 'center',
       backgroundColor: theme.background,
     },
-    title: {
-      flex: 1, 
-      fontSize: 30, 
+    titleContainer: { 
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 5, 
+    },
+
+    welcomeTitle: { 
+      fontSize: 20, 
+      fontWeight: 'bold',
+      color: theme.titleText, 
+      textAlign: 'center', 
+    },
+    defaultHomeTitle: { 
+      fontSize: 30,
       fontWeight: 'bold',
       color: theme.titleText,
       textAlign: 'center',
-      textShadowColor: 'rgba(0, 0, 0, 0.05)', 
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 1,
     },
     suggestionText: {
       fontSize: 15,

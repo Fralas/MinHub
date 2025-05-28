@@ -13,6 +13,7 @@ const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
 const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
+const REVERSE_DASHBOARD_ORDER_KEY = 'minhub_reverse_dashboard_order';
 
 const lightPurplePalette = {
   primary: '#8A63D2',    
@@ -23,6 +24,8 @@ const lightPurplePalette = {
   border: '#E2E8F0',     
   danger: '#E53E3E',      
   iconBackground: '#EDE9F6', 
+  switchThumbColor: '#FFFFFF', 
+  switchTrackColorFalse: '#DCDFE6', 
 };
 
 export default function SettingsScreen() {
@@ -32,25 +35,31 @@ export default function SettingsScreen() {
   const styles = createThemedStyles(lightPurplePalette);
 
   const [isPinEnabled, setIsPinEnabled] = useState(false);
-  const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(true);
-
-  const loadPinStatus = useCallback(async () => {
-    setIsLoadingPinStatus(true);
-    try {
-        const pinStatus = await AsyncStorage.getItem(PIN_ENABLED_KEY);
-        setIsPinEnabled(pinStatus === 'true');
-    } catch (error) {
-        console.error("Failed to load PIN status", error);
-        setIsPinEnabled(false);
-    } finally {
-        setIsLoadingPinStatus(false);
-    }
-  }, []);
+  const [isDashboardOrderReversed, setIsDashboardOrderReversed] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      loadPinStatus();
-    }, [loadPinStatus])
+      const loadAllSettings = async () => {
+        setIsLoadingSettings(true);
+        try {
+            const pinStatus = await AsyncStorage.getItem(PIN_ENABLED_KEY);
+            setIsPinEnabled(pinStatus === 'true');
+
+            const reverseOrderSetting = await AsyncStorage.getItem(REVERSE_DASHBOARD_ORDER_KEY);
+            setIsDashboardOrderReversed(reverseOrderSetting === 'true');
+
+        } catch (error) {
+            console.error("Failed to load settings", error);
+            setIsPinEnabled(false);
+            setIsDashboardOrderReversed(false);
+        } finally {
+            setIsLoadingSettings(false);
+        }
+      };
+
+      loadAllSettings();
+    }, []) 
   );
 
   const handleLogout = async () => {
@@ -58,7 +67,9 @@ export default function SettingsScreen() {
       await AsyncStorage.removeItem(USER_PROFILE_KEY);
       await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
       await AsyncStorage.removeItem(PIN_ENABLED_KEY);
+      await AsyncStorage.removeItem(REVERSE_DASHBOARD_ORDER_KEY); 
       await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
+
       router.replace('/');
     } catch (error) {
       console.error("Error during logout:", error);
@@ -82,7 +93,7 @@ export default function SettingsScreen() {
     }
     
     scheduleLocalNotification(
-      "MinHub Test! �",
+      "MinHub Test! 🚀",
       "This notification should appear in 1 second.",
       { customData: "test_from_settings_main" },
       1
@@ -101,11 +112,11 @@ export default function SettingsScreen() {
             text: "Disable", 
             style: "destructive",
             onPress: async () => {
-              setIsLoadingPinStatus(true);
+              setIsLoadingSettings(true); 
               await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
               await AsyncStorage.setItem(PIN_ENABLED_KEY, JSON.stringify(false));
               setIsPinEnabled(false);
-              setIsLoadingPinStatus(false);
+              setIsLoadingSettings(false);
               Alert.alert("PIN Disabled", "PIN lock has been disabled.");
             }
           }
@@ -116,11 +127,27 @@ export default function SettingsScreen() {
     }
   };
 
-  const handlePasswordRecovery = () => {
-    Alert.alert("Password Recovery", "Password recovery process would start here.");
+  const handleToggleDashboardOrder = async (value: boolean) => {
+    setIsDashboardOrderReversed(value);
+    try {
+        await AsyncStorage.setItem(REVERSE_DASHBOARD_ORDER_KEY, JSON.stringify(value));
+    } catch (error) {
+        console.error("Failed to save dashboard order setting:", error);
+        Alert.alert("Error", "Could not save dashboard order preference.");
+    }
   };
 
-  if (isLoadingPinStatus) {
+  const handlePasswordRecovery = () => {
+    const checkRecoveryAvailability = async () => {
+        Alert.alert(
+            "Password Recovery", 
+            "Password recovery via email is not implemented. Security question recovery needs to be set up first."
+        );
+    };
+    checkRecoveryAvailability();
+  };
+
+  if (isLoadingSettings) { 
     return (
         <View style={[styles.container, styles.loadingIndicatorContainer]}>
             <ActivityIndicator size="large" color={lightPurplePalette.primary} />
@@ -128,15 +155,15 @@ export default function SettingsScreen() {
     );
   }
 
-  const renderSettingRow = (iconName: keyof typeof Ionicons.glyphMap, text: string, onPress?: () => void, rightContent?: React.ReactNode) => (
-    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress}>
+  const renderSettingRow = (iconName: keyof typeof Ionicons.glyphMap, textKey: string, onPress?: () => void, rightContent?: React.ReactNode, defaultText?: string) => (
+    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress && !rightContent}>
       <View style={styles.rowLeft}>
         <View style={styles.iconContainer}>
           <Ionicons name={iconName} size={20} color={lightPurplePalette.primary} />
         </View>
-        <Text style={styles.rowLabel}>{text}</Text>
+        <Text style={styles.rowLabel}>{t(textKey, {defaultValue: defaultText || textKey})}</Text>
       </View>
-      {rightContent}
+      {rightContent || (onPress && <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
     </TouchableOpacity>
   );
 
@@ -144,45 +171,56 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollViewContent}>
-            <Text style={styles.headerTitle}>Settings</Text>
+            <Text style={styles.headerTitle}>{t('settings.title', {defaultValue: 'Settings'})}</Text>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t('settings.account', { defaultValue: 'Account' })}</Text>
-                {renderSettingRow('person-outline', t('settings.editProfile'), () => router.push('/edit-profile'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
-                {renderSettingRow('key-outline', t('settings.passwordRecovery', {defaultValue: 'Password Recovery'}), handlePasswordRecovery, <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
-                {renderSettingRow('notifications-outline', t('settings.notifications'), () => router.push('/notification-settings'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
+                {renderSettingRow('person-outline', 'settings.editProfile', () => router.push('/edit-profile'))}
+                {renderSettingRow('key-outline', 'settings.passwordRecovery', handlePasswordRecovery, undefined, 'Password Recovery')}
+                {renderSettingRow('notifications-outline', 'settings.notifications', () => router.push('/notification-settings'))}
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t('settings.security', {defaultValue: 'Security'})}</Text>
-                {renderSettingRow('lock-closed-outline', t('settings.enablePin', {defaultValue: 'Enable PIN Lock'}), handleTogglePinSetting, 
+                {renderSettingRow('lock-closed-outline', 'settings.enablePin', undefined, 
                   <Switch
                       value={isPinEnabled}
                       onValueChange={handleTogglePinSetting}
-                      trackColor={{ false: '#DCDFE6', true: lightPurplePalette.primary }}
-                      thumbColor={'#FFFFFF'}
-                      ios_backgroundColor="#DCDFE6"
-                  />
+                      trackColor={{ false: lightPurplePalette.switchTrackColorFalse, true: lightPurplePalette.primary }}
+                      thumbColor={lightPurplePalette.switchThumbColor}
+                      ios_backgroundColor={lightPurplePalette.switchTrackColorFalse}
+                  />,
+                  'Enable PIN Lock'
                 )}
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t('settings.appearance', {defaultValue: 'Appearance'})}</Text>
-                {renderSettingRow('moon-outline', t('settings.darkMode'), onToggleThemeSwitch, 
+                {renderSettingRow('moon-outline', 'settings.darkMode', undefined, 
                   <Switch
-                    value={isDark}
+                    value={isDark} 
                     onValueChange={onToggleThemeSwitch}
-                    trackColor={{ false: '#DCDFE6', true: lightPurplePalette.primary }}
-                    thumbColor={'#FFFFFF'}
-                    ios_backgroundColor="#DCDFE6"
+                    trackColor={{ false: lightPurplePalette.switchTrackColorFalse, true: lightPurplePalette.primary }}
+                    thumbColor={lightPurplePalette.switchThumbColor}
+                    ios_backgroundColor={lightPurplePalette.switchTrackColorFalse}
                   />
                 )}
-                {renderSettingRow('language-outline', t('settings.language'), () => router.push('/language-settings'), <Ionicons name="chevron-forward-outline" size={20} color={styles.rowIcon.color} />)}
+                {renderSettingRow('swap-vertical-outline', 'settings.reverseDashboardOrder', undefined, 
+                  <Switch
+                    value={isDashboardOrderReversed}
+                    onValueChange={handleToggleDashboardOrder}
+                    trackColor={{ false: lightPurplePalette.switchTrackColorFalse, true: lightPurplePalette.primary }}
+                    thumbColor={lightPurplePalette.switchThumbColor}
+                    ios_backgroundColor={lightPurplePalette.switchTrackColorFalse}
+                  />,
+                  'Reverse Dashboard Order'
+                )}
+                {renderSettingRow('language-outline', 'settings.language', () => router.push('/language-settings'))}
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t('settings.testing', {defaultValue: 'Testing'})}</Text>
-                {renderSettingRow('send-outline', t('settings.sendTestNotification'), handleSendTestNotification)}
+                {renderSettingRow('send-outline', 'settings.sendTestNotification', handleSendTestNotification, undefined, 'Send Test Notification')}
             </View>
             
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -227,12 +265,11 @@ const createThemedStyles = (theme: typeof lightPurplePalette) =>
       marginHorizontal: 16,
       backgroundColor: theme.card,
       borderRadius: 16,
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowColor: '#4A3F6D', 
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1, 
+      shadowRadius: 8,   
+      elevation: 5,      
     },
     sectionTitle: {
       fontSize: 14,
@@ -247,19 +284,20 @@ const createThemedStyles = (theme: typeof lightPurplePalette) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: 16, 
       paddingHorizontal: 20,
       borderBottomWidth: 1,
-      borderBottomColor: theme.background,
+      borderBottomColor: theme.border, 
     },
     rowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexShrink: 1, 
     },
     iconContainer: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38, 
+      height: 38,
+      borderRadius: 10, 
       backgroundColor: theme.iconBackground,
       justifyContent: 'center',
       alignItems: 'center',
@@ -268,8 +306,9 @@ const createThemedStyles = (theme: typeof lightPurplePalette) =>
     rowLabel: {
       fontSize: 16,
       color: theme.text,
+      fontWeight: '500', 
     },
-    rowIcon: {
+    rowIcon: { 
       color: theme.subtleText,
     },
     logoutButton: {
@@ -278,9 +317,11 @@ const createThemedStyles = (theme: typeof lightPurplePalette) =>
       justifyContent: 'center',
       marginHorizontal: 16,
       marginTop: 30,
-      backgroundColor: theme.card,
-      paddingVertical: 14,
-      borderRadius: 16,
+      backgroundColor: theme.card, 
+      paddingVertical: 16, 
+      borderRadius: 16,    
+      borderWidth: 1,
+      borderColor: theme.danger, 
     },
     logoutButtonText: {
       fontSize: 16,
