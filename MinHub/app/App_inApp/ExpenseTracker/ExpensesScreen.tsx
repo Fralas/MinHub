@@ -7,10 +7,10 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
-  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import RecurringExpenseModal from './RecurringExpenseModal';
 
 interface Expense {
   amount: number;
@@ -25,12 +25,13 @@ const predefinedCategories = ['Food', 'Shopping', 'Trips', 'Transport', 'Health'
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Food');
-  const [note, setNote] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDate, setFilterDate] = useState('');
+
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('Food');
+  const [note, setNote] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
 
   useEffect(() => {
@@ -120,7 +121,6 @@ export default function ExpensesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Filters */}
       <View style={{ flexDirection: 'row', marginTop: 10, marginBottom: 10 }}>
         <TextInput
           placeholder="Filter by category"
@@ -168,48 +168,19 @@ export default function ExpensesScreen() {
         )}
       />
 
-      {/* Modal for adding expenses */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <TextInput
-              placeholder="Amount"
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              style={styles.input}
-            />
-            <Picker
-              selectedValue={category}
-              onValueChange={(itemValue) => setCategory(itemValue)}
-              style={styles.picker}
-            >
-              {predefinedCategories.map((cat) => (
-                <Picker.Item key={cat} label={cat} value={cat} />
-              ))}
-            </Picker>
-            <TextInput
-              placeholder="Note (Title)"
-              value={note}
-              onChangeText={setNote}
-              style={styles.input}
-            />
-            <View style={styles.switchContainer}>
-              <Text>Recurring monthly?</Text>
-              <Switch
-                value={isRecurring}
-                onValueChange={setIsRecurring}
-              />
-            </View>
-            <TouchableOpacity onPress={addExpense} style={styles.saveButton}>
-              <Text style={styles.saveButtonText}>Add Expense</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={{ color: 'red', marginTop: 10 }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <RecurringExpenseModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onAdd={addExpense}
+        amount={amount}
+        setAmount={setAmount}
+        category={category}
+        setCategory={setCategory}
+        note={note}
+        setNote={setNote}
+        isRecurring={isRecurring}
+        setIsRecurring={setIsRecurring}
+      />
     </View>
   );
 }
@@ -255,41 +226,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   deleteButtonText: { color: 'white', fontWeight: 'bold' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: '#000000aa',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    width: '80%',
-  },
   input: {
     borderWidth: 1,
     padding: 8,
     marginBottom: 10,
     borderRadius: 6,
-  },
-  picker: {
-    borderWidth: 1,
-    borderRadius: 6,
-    marginBottom: 10,
-    backgroundColor: '#f0f0f0',
-  },
-  saveButton: {
-    backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  saveButtonText: { color: 'white', fontWeight: 'bold' },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    justifyContent: 'space-between',
   },
 });
