@@ -71,6 +71,8 @@ const allAppFeatures: AppFeature[] = [
   { id: 'earTraining', name: 'EarTraining', href: '/App_inApp/EarTraining/earTraining', iconName: 'musical-notes-outline' },
   { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro', iconName: 'timer-outline' },
   { id: 'memory', name: 'Memory', href: '/App_inApp/Memory/MemoryGame', iconName: 'game-controller-outline' },
+  { id: 'expense', name: 'Expense Tracker', href: '/App_inApp/ExpenseTracker/expenses',  },
+
 ];
 
 function useUserProfile() {
@@ -126,7 +128,7 @@ export default function HomeScreen() {
         if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory')) {
           relevance = 10;
         }
-        if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {
+        if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner' || feature.id === 'expense')) {
           relevance = 10;
         }
         if (userProfile.hobbies.includes('🍳 Cooking') && (feature.id === 'foodScheduler' || feature.id === 'shoppingList')) {
