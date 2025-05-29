@@ -8,6 +8,7 @@ import {
   Modal,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -134,46 +135,50 @@ const ExpensesScreen = () => {
       {/* Add Expense Modal */}
       <Modal visible={modalVisible} animationType="slide">
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Add Expense</Text>
-          <TextInput
-            placeholder="Title"
-            value={title}
-            onChangeText={setTitle}
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Amount"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="numeric"
-            style={styles.input}
-          />
-          <Text style={{ marginBottom: 6 }}>Category:</Text>
-          <FlatList
-            horizontal
-            data={categories.filter(cat => cat !== 'All')}
-            keyExtractor={item => item}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.filterButton,
-                  category === item && styles.activeFilterButton,
-                ]}
-                onPress={() => setCategory(item)}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    category === item && styles.activeFilterText,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
-          />
-          <Button title="Add" onPress={addExpense} />
-          <Button title="Cancel" color="red" onPress={() => setModalVisible(false)} />
+          <ScrollView contentContainerStyle={styles.modalScroll}>
+            <Text style={styles.modalTitle}>Add Expense</Text>
+            <TextInput
+              placeholder="Title"
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Amount"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              style={styles.input}
+            />
+            <Text style={{ marginBottom: 6 }}>Category:</Text>
+            {/* Wrap category buttons */}
+            <View style={styles.categoryWrap}>
+              {categories
+                .filter(cat => cat !== 'All')
+                .map(item => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.filterButtonModal,
+                      category === item && styles.activeFilterButtonModal,
+                    ]}
+                    onPress={() => setCategory(item)}
+                  >
+                    <Text
+                      style={[
+                        styles.filterTextModal,
+                        category === item && styles.activeFilterTextModal,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+            <Button title="Add" onPress={addExpense} />
+            <View style={{ height: 10 }} />
+            <Button title="Cancel" color="red" onPress={() => setModalVisible(false)} />
+          </ScrollView>
         </View>
       </Modal>
 
@@ -237,23 +242,27 @@ const styles = StyleSheet.create({
   },
   expenseItem: {
     backgroundColor: '#f8f8f8',
-    padding: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   expenseTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   expenseMeta: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
   modalContent: {
     flex: 1,
     padding: 16,
     marginTop: 40,
+  },
+  modalScroll: {
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 22,
@@ -280,6 +289,31 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 28,
+    color: '#fff',
+  },
+  categoryWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  filterButtonModal: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  filterTextModal: {
+    fontSize: 14,
+    color: '#000',
+  },
+  activeFilterButtonModal: {
+    backgroundColor: '#007bff',
+    borderColor: '#007bff',
+  },
+  activeFilterTextModal: {
     color: '#fff',
   },
 });
