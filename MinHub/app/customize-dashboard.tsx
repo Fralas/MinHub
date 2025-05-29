@@ -15,6 +15,7 @@ const lightPurplePalette = {
   iconBackground: '#EDE9F6',
 };
 
+
 interface AppFeatureForSort {
   id: string;
   name: string;
@@ -107,12 +108,23 @@ export default function CustomizeDashboardScreen() {
             isActive && styles.draggableRowActive,
           ]}
         >
+          <View style={styles.rowLeft}>
+            <Ionicons name={item.iconName || 'apps-outline'} size={20} color={lightPurplePalette.primary} style={styles.dragIcon} />
+            <Text style={styles.rowLabel}>{item.name}</Text>
+          </View>
           <Ionicons name="reorder-three-outline" size={28} color={lightPurplePalette.subtleText} />
         </TouchableOpacity>
       </ScaleDecorator>
     );
   };
 
+  if (isLoading && orderedFeatures.length === 0) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={lightPurplePalette.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -158,7 +170,7 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => StyleSheet.crea
         borderBottomColor: theme.border,
     },
     headerTitle: {
-        fontSize: 26,
+        fontSize: 22,
         fontWeight: 'bold',
         color: theme.text,
         textAlign: 'center',
@@ -174,7 +186,7 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => StyleSheet.crea
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 26,
+        paddingVertical: 16,
         paddingHorizontal: 20,
         borderBottomWidth: 1,
         borderBottomColor: theme.border,
@@ -202,7 +214,7 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => StyleSheet.crea
         backgroundColor: theme.primary,
         paddingVertical: 16,
         marginHorizontal: 20,
-        marginBottom: Platform.OS === 'ios' ? 10 : 20, 
+        marginBottom: Platform.OS === 'ios' ? 10 : 20,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',

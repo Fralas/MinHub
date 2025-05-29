@@ -16,7 +16,7 @@ import {
 
 const { width: screenWidth } = Dimensions.get('window');
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
-const REVERSE_DASHBOARD_ORDER_KEY = 'minhub_reverse_dashboard_order';
+const CUSTOM_DASHBOARD_ORDER_KEY = 'minhub_custom_dashboard_order'; 
 
 interface UserProfile {
   age: string;
@@ -36,7 +36,7 @@ interface AppFeature {
   iconName?: keyof typeof Ionicons.glyphMap;
 }
 
-const lightPurplePalette = {
+const lightPurplePalette = { 
   primary: '#8A63D2',
   background: '#F5F3F9',
   card: '#FFFFFF',
@@ -50,6 +50,7 @@ const lightPurplePalette = {
   titleText: '#6B46C1', 
   headerBackground: '#FFFFFF',
 };
+
 
 const allAppFeatures: AppFeature[] = [
   { id: 'todo', name: 'Todo List', href: '/App_inApp/ToDoList/toDoList', iconName: 'list-outline' },
@@ -77,7 +78,7 @@ const allAppFeatures: AppFeature[] = [
 
 function useAppInitialData() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isDashboardOrderReversed, setIsDashboardOrderReversed] = useState(false);
+  const [customDashboardOrder, setCustomDashboardOrder] = useState<string[] | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   useFocusEffect(
@@ -86,41 +87,49 @@ function useAppInitialData() {
         setIsLoadingData(true);
         try {
           const profileDataString = await AsyncStorage.getItem(USER_PROFILE_KEY);
-          if (profileDataString) {
-            setUserProfile(JSON.parse(profileDataString));
-          } else {
-            setUserProfile(null);
-          }
+          setUserProfile(profileDataString ? JSON.parse(profileDataString) : null);
 
-          const reverseOrderSetting = await AsyncStorage.getItem(REVERSE_DASHBOARD_ORDER_KEY);
-          setIsDashboardOrderReversed(reverseOrderSetting === 'true');
+          const customOrderJson = await AsyncStorage.getItem(CUSTOM_DASHBOARD_ORDER_KEY);
+          setCustomDashboardOrder(customOrderJson ? JSON.parse(customOrderJson) : null);
 
         } catch (error) {
           console.error('Failed to load app initial data:', error);
           setUserProfile(null);
-          setIsDashboardOrderReversed(false);
+          setCustomDashboardOrder(null);
         } finally {
           setIsLoadingData(false);
         }
       };
-
       loadData();
     }, [])
   );
-
-  return { userProfile, isDashboardOrderReversed, isLoadingData };
+  return { userProfile, customDashboardOrder, isLoadingData };
 }
 
 export default function HomeScreen() {
-  const { userProfile, isDashboardOrderReversed, isLoadingData } = useAppInitialData();
+  const { userProfile, customDashboardOrder, isLoadingData } = useAppInitialData();
   const router = useRouter();
   const styles = createThemedStyles(lightPurplePalette);
 
   const personalizedFeatures = useMemo(() => {
-    let features = [...allAppFeatures]; 
+    let featuresToDisplay = [...allAppFeatures];
+    const featuresMap = new Map(featuresToDisplay.map(f => [f.id, f]));
 
-    if (userProfile) {
-      features = features
+    if (customDashboardOrder) {
+        const orderedFromCustom = customDashboardOrder
+            .map(id => featuresMap.get(id))
+            .filter(Boolean) as AppFeature[];
+        
+        const customOrderSet = new Set(customDashboardOrder);
+        featuresToDisplay.forEach(feature => {
+            if (!customOrderSet.has(feature.id)) {
+                orderedFromCustom.push(feature); 
+            }
+        });
+        featuresToDisplay = orderedFromCustom;
+    } 
+    else if (userProfile) {
+      featuresToDisplay = featuresToDisplay
         .map(feature => {
           let relevance = 0;
           if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
@@ -139,18 +148,14 @@ export default function HomeScreen() {
         })
         .sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
     }
-    
-    if (isDashboardOrderReversed) {
-      return features.reverse();
-    }
-    return features;
-  }, [userProfile, isDashboardOrderReversed]);
+    return featuresToDisplay;
+  }, [userProfile, customDashboardOrder]); 
 
   if (isLoadingData) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={lightPurplePalette.primary} />
-      </View>
+    return ( /* ... (loading UI invariata) ... */ 
+        <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={lightPurplePalette.primary} />
+        </View>
     );
   }
 
@@ -197,7 +202,7 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
   const horizontalPaddingTotalForGrid = 32;
   const gapBetweenItems = 16;
   const itemWidth = (screenWidth - horizontalPaddingTotalForGrid - (gapBetweenItems * (numColumns - 1))) / numColumns;
-  const headerHeight = Platform.OS === 'android' ? 110 : 100;
+  const headerHeight = Platform.OS === 'android' ? 110 : 100; 
 
   return StyleSheet.create({
     safeAreaContainer: {
@@ -235,7 +240,6 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
       alignItems: 'center',
       paddingHorizontal: 5, 
     },
-
     welcomeTitle: { 
       fontSize: 20, 
       fontWeight: 'bold',
@@ -293,5 +297,3 @@ const createThemedStyles = (theme: typeof lightPurplePalette) => {
     },
   });
 };
-
-

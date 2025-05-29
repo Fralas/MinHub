@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { I18nProvider, useI18n } from '../src/contexts/I18nContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 
@@ -31,19 +30,6 @@ function ThemedStack() {
         name="home"
         options={({ navigation }) => ({
           headerShown: false,
-          title: t('home.defaultTitle', { defaultValue: 'MinHub Home'}),
-          headerStyle: { backgroundColor: theme.primary }, 
-          headerTintColor: headerTintColor,
-          headerTitleStyle: { fontWeight: 'bold', color: headerTintColor },
-          headerLeft: () => null, 
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('settings')}
-              style={{ marginRight: 15, padding: 5 }}
-            >
-              <Ionicons name="settings-outline" size={26} color={headerTintColor} />
-            </TouchableOpacity>
-          ),
         })}
       />
       <Stack.Screen
@@ -109,6 +95,17 @@ function ThemedStack() {
           headerTitleStyle: modalHeaderTitleStyle,
         }}
       />
+      <Stack.Screen
+        name="customize-dashboard"
+        options={{
+          title: t('customizeDashboard.title', { defaultValue: 'Customize Dashboard' }), 
+          headerShown: true,
+          presentation: 'modal', 
+          headerStyle: modalHeaderStyle,
+          headerTintColor: theme.text, 
+          headerTitleStyle: modalHeaderTitleStyle,
+        }}
+      />
       <Stack.Screen name="App_inApp" options={{ headerShown: false }} />
     </Stack>
   );
@@ -116,10 +113,12 @@ function ThemedStack() {
 
 export default function RootLayout() {
   return (
-    <I18nProvider>
-      <ThemeProvider>
-        <ThemedStack />
-      </ThemeProvider>
-    </I18nProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}> 
+      <I18nProvider>
+        <ThemeProvider>
+          <ThemedStack />
+        </ThemeProvider>
+      </I18nProvider>
+    </GestureHandlerRootView>
   );
 }
