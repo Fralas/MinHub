@@ -6,10 +6,8 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
 import RecurringExpenseModal from './RecurringExpenseModal';
 
 interface Expense {
@@ -20,8 +18,6 @@ interface Expense {
   recurring?: boolean;
   lastGenerated?: string;
 }
-
-const predefinedCategories = ['Food', 'Shopping', 'Trips', 'Transport', 'Health', 'Entertainment', 'Other'];
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -77,8 +73,13 @@ export default function ExpensesScreen() {
   };
 
   const addExpense = async () => {
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return;
+    }
+
     const newExpense: Expense = {
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       category: category || 'Other',
       note,
       timestamp: new Date().toLocaleString(),
@@ -105,10 +106,8 @@ export default function ExpensesScreen() {
 
   const filteredExpenses = expenses.filter(exp => {
     const categoryMatch =
-      filterCategory === '' ||
-      exp.category.toLowerCase().includes(filterCategory.toLowerCase());
-    const dateMatch =
-      filterDate === '' || exp.timestamp.includes(filterDate);
+      filterCategory === '' || exp.category.toLowerCase().includes(filterCategory.toLowerCase());
+    const dateMatch = filterDate === '' || exp.timestamp.includes(filterDate);
     return categoryMatch && dateMatch;
   });
 

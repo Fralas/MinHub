@@ -52,7 +52,7 @@ export default function RecurringExpenseModal({
           />
           <Picker
             selectedValue={category}
-            onValueChange={(itemValue) => setCategory(itemValue)}
+            onValueChange={setCategory}
             style={styles.picker}
           >
             {predefinedCategories.map((cat) => (
@@ -99,21 +99,22 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    padding: 8,
-    marginBottom: 10,
+    borderColor: '#ccc',
+    padding: 10,
     borderRadius: 6,
+    marginBottom: 10,
   },
   picker: {
     borderWidth: 1,
+    borderColor: '#ccc',
     borderRadius: 6,
     marginBottom: 10,
-    backgroundColor: '#f0f0f0',
   },
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
   saveButton: {
     backgroundColor: '#007bff',
