@@ -13,7 +13,7 @@ const USER_PROFILE_KEY = 'minhub_user_profile_data';
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
 const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
 const PIN_SECURE_STORE_KEY = 'minhub_user_pin';
-const REVERSE_DASHBOARD_ORDER_KEY = 'minhub_reverse_dashboard_order';
+const CUSTOM_DASHBOARD_ORDER_KEY = 'minhub_custom_dashboard_order'; 
 
 const lightPurplePalette = {
   primary: '#8A63D2',    
@@ -35,7 +35,6 @@ export default function SettingsScreen() {
   const styles = createThemedStyles(lightPurplePalette);
 
   const [isPinEnabled, setIsPinEnabled] = useState(false);
-  const [isDashboardOrderReversed, setIsDashboardOrderReversed] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   useFocusEffect(
@@ -46,18 +45,13 @@ export default function SettingsScreen() {
             const pinStatus = await AsyncStorage.getItem(PIN_ENABLED_KEY);
             setIsPinEnabled(pinStatus === 'true');
 
-            const reverseOrderSetting = await AsyncStorage.getItem(REVERSE_DASHBOARD_ORDER_KEY);
-            setIsDashboardOrderReversed(reverseOrderSetting === 'true');
-
         } catch (error) {
             console.error("Failed to load settings", error);
             setIsPinEnabled(false);
-            setIsDashboardOrderReversed(false);
         } finally {
             setIsLoadingSettings(false);
         }
       };
-
       loadAllSettings();
     }, []) 
   );
@@ -67,9 +61,8 @@ export default function SettingsScreen() {
       await AsyncStorage.removeItem(USER_PROFILE_KEY);
       await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
       await AsyncStorage.removeItem(PIN_ENABLED_KEY);
-      await AsyncStorage.removeItem(REVERSE_DASHBOARD_ORDER_KEY); 
-      await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
 
+      await SecureStore.deleteItemAsync(PIN_SECURE_STORE_KEY);
       router.replace('/');
     } catch (error) {
       console.error("Error during logout:", error);
@@ -126,17 +119,7 @@ export default function SettingsScreen() {
       router.push('/set-pin');
     }
   };
-
-  const handleToggleDashboardOrder = async (value: boolean) => {
-    setIsDashboardOrderReversed(value);
-    try {
-        await AsyncStorage.setItem(REVERSE_DASHBOARD_ORDER_KEY, JSON.stringify(value));
-    } catch (error) {
-        console.error("Failed to save dashboard order setting:", error);
-        Alert.alert("Error", "Could not save dashboard order preference.");
-    }
-  };
-
+  
   const handlePasswordRecovery = () => {
     const checkRecoveryAvailability = async () => {
         Alert.alert(
@@ -146,6 +129,7 @@ export default function SettingsScreen() {
     };
     checkRecoveryAvailability();
   };
+
 
   if (isLoadingSettings) { 
     return (
@@ -205,16 +189,8 @@ export default function SettingsScreen() {
                     ios_backgroundColor={lightPurplePalette.switchTrackColorFalse}
                   />
                 )}
-                {renderSettingRow('swap-vertical-outline', 'settings.reverseDashboardOrder', undefined, 
-                  <Switch
-                    value={isDashboardOrderReversed}
-                    onValueChange={handleToggleDashboardOrder}
-                    trackColor={{ false: lightPurplePalette.switchTrackColorFalse, true: lightPurplePalette.primary }}
-                    thumbColor={lightPurplePalette.switchThumbColor}
-                    ios_backgroundColor={lightPurplePalette.switchTrackColorFalse}
-                  />,
-                  'Reverse Dashboard Order'
-                )}
+                {renderSettingRow('reorder-four-outline', 'settings.customizeDashboard', () => router.push('./customize-dashboard'), undefined, 'Customize Dashboard Order')}
+                
                 {renderSettingRow('language-outline', 'settings.language', () => router.push('/language-settings'))}
             </View>
 
