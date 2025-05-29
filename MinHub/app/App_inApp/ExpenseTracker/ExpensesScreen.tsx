@@ -9,9 +9,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 interface Expense {
   id: string;
@@ -51,6 +54,30 @@ const ExpensesScreen = () => {
     setTitle('');
     setAmount('');
     setCategory('Other');
+  };
+
+  const exportToCSV = async () => {
+    if (expenses.length === 0) {
+      Alert.alert('Nothing to export', 'There are no expenses to export.');
+      return;
+    }
+
+    const header = 'Title,Amount,Category,Date\n';
+    const rows = expenses.map(exp =>
+      `"${exp.title}",${exp.amount},"${exp.category}","${exp.timestamp}"`
+    );
+    const csv = header + rows.join('\n');
+
+    const fileUri = FileSystem.documentDirectory + 'expenses.csv';
+    await FileSystem.writeAsStringAsync(fileUri, csv, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(fileUri);
+    } else {
+      Alert.alert('CSV Exported', `File saved at: ${fileUri}`);
+    }
   };
 
   const filteredExpenses = expenses.filter(exp => {
@@ -119,6 +146,9 @@ const ExpensesScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Export Button */}
+      <Button title="Export to CSV" onPress={exportToCSV} />
+
       {/* Expenses List */}
       <FlatList
         data={filteredExpenses}
@@ -151,7 +181,6 @@ const ExpensesScreen = () => {
               style={styles.input}
             />
             <Text style={{ marginBottom: 6 }}>Category:</Text>
-            {/* Wrap category buttons */}
             <View style={styles.categoryWrap}>
               {categories
                 .filter(cat => cat !== 'All')
