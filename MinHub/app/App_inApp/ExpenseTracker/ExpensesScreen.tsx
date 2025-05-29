@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,26 @@ const ExpensesScreen = () => {
   const [filterDate, setFilterDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  useEffect(() => {
+    const loadExpenses = async () => {
+      const saved = await AsyncStorage.getItem('expenses');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setExpenses(parsed);
+        } catch (e) {
+          console.error('Failed to parse expenses from storage.', e);
+        }
+      }
+    };
+    loadExpenses();
+  }, []);
+
+  const saveExpenses = async (newExpenses: Expense[]) => {
+    setExpenses(newExpenses);
+    await AsyncStorage.setItem('expenses', JSON.stringify(newExpenses));
+  };
+
   const addExpense = async () => {
     if (!title || !amount) return;
 
@@ -48,12 +68,40 @@ const ExpensesScreen = () => {
     };
 
     const updatedExpenses = [...expenses, newExpense];
-    setExpenses(updatedExpenses);
     await AsyncStorage.setItem('expenses', JSON.stringify(updatedExpenses));
+    await saveExpenses(updatedExpenses);
+
     setModalVisible(false);
     setTitle('');
     setAmount('');
     setCategory('Other');
+  };
+
+  const deleteExpense = (id: string) => {
+    Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const updatedExpenses = expenses.filter(exp => exp.id !== id);
+          await saveExpenses(updatedExpenses);
+        },
+      },
+    ]);
+  };
+
+  const clearAllExpenses = () => {
+    Alert.alert('Clear All', 'Are you sure you want to delete all expenses?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear All',
+        style: 'destructive',
+        onPress: async () => {
+          await saveExpenses([]);
+        },
+      },
+    ]);
   };
 
   const exportToCSV = async () => {
@@ -63,8 +111,8 @@ const ExpensesScreen = () => {
     }
 
     const header = 'Title,Amount,Category,Date\n';
-    const rows = expenses.map(exp =>
-      `"${exp.title}",${exp.amount},"${exp.category}","${exp.timestamp}"`
+    const rows = expenses.map(
+      exp => `"${exp.title}",${exp.amount},"${exp.category}","${exp.timestamp}"`
     );
     const csv = header + rows.join('\n');
 
@@ -82,8 +130,7 @@ const ExpensesScreen = () => {
 
   const filteredExpenses = expenses.filter(exp => {
     const categoryMatch = filterCategory === 'All' || exp.category === filterCategory;
-    const dateMatch =
-      !filterDate || exp.timestamp === filterDate.toLocaleDateString();
+    const dateMatch = !filterDate || exp.timestamp === filterDate.toLocaleDateString();
     return categoryMatch && dateMatch;
   });
 
@@ -146,19 +193,26 @@ const ExpensesScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Export Button */}
-      <Button title="Export to CSV" onPress={exportToCSV} />
+      {/* Export and Clear Buttons */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Button title="Export to CSV" onPress={exportToCSV} />
+        <Button title="Clear All" color="red" onPress={clearAllExpenses} />
+      </View>
 
       {/* Expenses List */}
       <FlatList
         data={filteredExpenses}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View style={styles.expenseItem}>
-            <Text style={styles.expenseTitle}>{item.title}</Text>
-            <Text>${item.amount.toFixed(2)}</Text>
-            <Text style={styles.expenseMeta}>{item.category} • {item.timestamp}</Text>
-          </View>
+          <TouchableOpacity onLongPress={() => deleteExpense(item.id)}>
+            <View style={styles.expenseItem}>
+              <Text style={styles.expenseTitle}>{item.title}</Text>
+              <Text>${item.amount.toFixed(2)}</Text>
+              <Text style={styles.expenseMeta}>
+                {item.category} • {item.timestamp}
+              </Text>
+            </View>
+          </TouchableOpacity>
         )}
       />
 
@@ -211,10 +265,7 @@ const ExpensesScreen = () => {
         </View>
       </Modal>
 
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => setModalVisible(true)}
-      >
+      <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
         <Text style={styles.addButtonText}>＋</Text>
       </TouchableOpacity>
     </View>
