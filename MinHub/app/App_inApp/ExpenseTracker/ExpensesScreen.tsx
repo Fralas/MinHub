@@ -1,234 +1,285 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   TextInput,
+  Button,
+  Modal,
   TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RecurringExpenseModal from './RecurringExpenseModal';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Expense {
+  id: string;
+  title: string;
   amount: number;
   category: string;
-  note: string;
   timestamp: string;
-  recurring?: boolean;
-  lastGenerated?: string;
 }
 
-export default function ExpensesScreen() {
+const categories = ['All', 'Food', 'Transport', 'Health', 'Entertainment', 'Other'];
+
+const ExpensesScreen = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterDate, setFilterDate] = useState('');
-
+  const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Food');
-  const [note, setNote] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
-
-  useEffect(() => {
-    const loadExpenses = async () => {
-      const stored = await AsyncStorage.getItem('expenseHistory');
-      if (stored) {
-        const parsed: Expense[] = JSON.parse(stored);
-        const updated = generateRecurringExpenses(parsed);
-        setExpenses(updated);
-        if (updated.length !== parsed.length) {
-          await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
-        }
-      }
-    };
-    loadExpenses();
-  }, []);
-
-  const generateRecurringExpenses = (data: Expense[]) => {
-    const now = new Date();
-    const updatedData = [...data];
-    const recurringItems = data.filter(exp => exp.recurring);
-
-    for (const exp of recurringItems) {
-      const last = exp.lastGenerated ? new Date(exp.lastGenerated) : new Date(exp.timestamp);
-      const diffDays = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays >= 30) {
-        const newExpense: Expense = {
-          ...exp,
-          timestamp: new Date().toLocaleString(),
-          lastGenerated: new Date().toISOString(),
-        };
-        updatedData.unshift(newExpense);
-
-        const originalIndex = updatedData.findIndex(
-          e => e.timestamp === exp.timestamp && e.note === exp.note && e.amount === exp.amount
-        );
-        if (originalIndex !== -1) {
-          updatedData[originalIndex].lastGenerated = new Date().toISOString();
-        }
-      }
-    }
-    return updatedData;
-  };
+  const [category, setCategory] = useState('Other');
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [filterDate, setFilterDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const addExpense = async () => {
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return;
-    }
+    if (!title || !amount) return;
 
     const newExpense: Expense = {
-      amount: parsedAmount,
-      category: category || 'Other',
-      note,
-      timestamp: new Date().toLocaleString(),
-      recurring: isRecurring,
-      lastGenerated: isRecurring ? new Date().toISOString() : undefined,
+      id: Date.now().toString(),
+      title,
+      amount: parseFloat(amount),
+      category,
+      timestamp: new Date().toLocaleDateString(),
     };
-    const updated = [newExpense, ...expenses];
-    setExpenses(updated);
-    await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
-    setAmount('');
-    setCategory('Food');
-    setNote('');
-    setIsRecurring(false);
+
+    const updatedExpenses = [...expenses, newExpense];
+    setExpenses(updatedExpenses);
+    await AsyncStorage.setItem('expenses', JSON.stringify(updatedExpenses));
     setModalVisible(false);
+    setTitle('');
+    setAmount('');
+    setCategory('Other');
   };
-
-  const deleteExpense = async (indexToDelete: number) => {
-    const updated = expenses.filter((_, index) => index !== indexToDelete);
-    setExpenses(updated);
-    await AsyncStorage.setItem('expenseHistory', JSON.stringify(updated));
-  };
-
-  const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   const filteredExpenses = expenses.filter(exp => {
-    const categoryMatch =
-      filterCategory === '' || exp.category.toLowerCase().includes(filterCategory.toLowerCase());
-    const dateMatch = filterDate === '' || exp.timestamp.includes(filterDate);
+    const categoryMatch = filterCategory === 'All' || exp.category === filterCategory;
+    const dateMatch =
+      !filterDate || exp.timestamp === filterDate.toLocaleDateString();
     return categoryMatch && dateMatch;
   });
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.header}>Total expense: ${totalSpent.toFixed(2)}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <Text style={styles.addButtonText}>+</Text>
+      <Text style={styles.header}>Expenses</Text>
+
+      {/* Filter Controls */}
+      <View style={styles.filters}>
+        <Text style={styles.filterLabel}>Filter:</Text>
+        <FlatList
+          horizontal
+          data={categories}
+          keyExtractor={item => item}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                filterCategory === item && styles.activeFilterButton,
+              ]}
+              onPress={() => setFilterCategory(item)}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  filterCategory === item && styles.activeFilterText,
+                ]}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+
+        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateFilterButton}>
+          <Text style={styles.dateFilterText}>
+            {filterDate ? filterDate.toLocaleDateString() : 'Filter by date'}
+          </Text>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={filterDate || new Date()}
+            mode="date"
+            display="calendar"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) setFilterDate(selectedDate);
+            }}
+          />
+        )}
+
+        <TouchableOpacity
+          onPress={() => {
+            setFilterCategory('All');
+            setFilterDate(null);
+          }}
+        >
+          <Text style={{ color: '#007bff', marginBottom: 10 }}>Clear Filters</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={{ flexDirection: 'row', marginTop: 10, marginBottom: 10 }}>
-        <TextInput
-          placeholder="Filter by category"
-          value={filterCategory}
-          onChangeText={setFilterCategory}
-          style={[styles.input, { flex: 1, marginRight: 5 }]}
-        />
-        <TextInput
-          placeholder="Filter by date (e.g., 5/27/2025)"
-          value={filterDate}
-          onChangeText={setFilterDate}
-          style={[styles.input, { flex: 1 }]}
-        />
-      </View>
-      <TouchableOpacity onPress={() => { setFilterCategory(''); setFilterDate(''); }}>
-        <Text style={{ color: '#007bff', marginBottom: 10 }}>Clear Filters</Text>
-      </TouchableOpacity>
-
-      <View style={styles.tableHeader}>
-        <Text style={styles.tableCell}>Title</Text>
-        <Text style={styles.tableCell}>Date</Text>
-        <Text style={styles.tableCell}>Category</Text>
-        <Text style={[styles.tableCell, { flex: 0.8 }]}>Actions</Text>
-      </View>
-
+      {/* Expenses List */}
       <FlatList
         data={filteredExpenses}
-        keyExtractor={(_, index) => index.toString()}
-        renderItem={({ item, index }) => (
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
           <View style={styles.expenseItem}>
-            <Text style={styles.tableCell}>{item.note || 'No title'}</Text>
-            <Text style={styles.tableCell}>{item.timestamp}</Text>
-            <Text style={styles.tableCell}>
-              {item.category}
-              {item.recurring ? ' 🔁' : ''}
-            </Text>
-            <Text style={styles.amountText}>${item.amount.toFixed(2)}</Text>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => deleteExpense(index)}
-            >
-              <Text style={styles.deleteButtonText}>🗑</Text>
-            </TouchableOpacity>
+            <Text style={styles.expenseTitle}>{item.title}</Text>
+            <Text>${item.amount.toFixed(2)}</Text>
+            <Text style={styles.expenseMeta}>{item.category} • {item.timestamp}</Text>
           </View>
         )}
       />
 
-      <RecurringExpenseModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onAdd={addExpense}
-        amount={amount}
-        setAmount={setAmount}
-        category={category}
-        setCategory={setCategory}
-        note={note}
-        setNote={setNote}
-        isRecurring={isRecurring}
-        setIsRecurring={setIsRecurring}
-      />
+      {/* Add Expense Modal */}
+      <Modal visible={modalVisible} animationType="slide">
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Add Expense</Text>
+          <TextInput
+            placeholder="Title"
+            value={title}
+            onChangeText={setTitle}
+            style={styles.input}
+          />
+          <TextInput
+            placeholder="Amount"
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            style={styles.input}
+          />
+          <Text style={{ marginBottom: 6 }}>Category:</Text>
+          <FlatList
+            horizontal
+            data={categories.filter(cat => cat !== 'All')}
+            keyExtractor={item => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  category === item && styles.activeFilterButton,
+                ]}
+                onPress={() => setCategory(item)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    category === item && styles.activeFilterText,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+          <Button title="Add" onPress={addExpense} />
+          <Button title="Cancel" color="red" onPress={() => setModalVisible(false)} />
+        </View>
+      </Modal>
+
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={styles.addButtonText}>＋</Text>
+      </TouchableOpacity>
     </View>
   );
-}
+};
+
+export default ExpensesScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  container: {
+    flex: 1,
+    padding: 16,
   },
-  header: { fontSize: 24, fontWeight: 'bold' },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007bff',
-    justifyContent: 'center',
-    alignItems: 'center',
+  header: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
-  addButtonText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  tableHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    marginTop: 20,
+  filters: {
+    marginBottom: 12,
   },
-  tableCell: { flex: 1, fontWeight: 'bold' },
-  expenseItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  filterLabel: {
+    marginBottom: 6,
+    fontWeight: 'bold',
+  },
+  filterButton: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
     paddingVertical: 6,
-    borderBottomWidth: 0.5,
-    alignItems: 'center',
+    paddingHorizontal: 12,
+    marginRight: 8,
   },
-  amountText: { flex: 1, textAlign: 'right', fontWeight: 'bold' },
-  deleteButton: {
-    backgroundColor: '#ff4d4d',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+  activeFilterButton: {
+    backgroundColor: '#007bff',
+    borderColor: '#007bff',
+  },
+  filterText: {
+    color: '#000',
+  },
+  activeFilterText: {
+    color: '#fff',
+  },
+  dateFilterButton: {
+    borderWidth: 1,
+    borderColor: '#ccc',
     borderRadius: 6,
-    marginLeft: 10,
+    padding: 10,
+    marginTop: 10,
+    marginBottom: 10,
   },
-  deleteButtonText: { color: 'white', fontWeight: 'bold' },
+  dateFilterText: {
+    color: '#000',
+  },
+  expenseItem: {
+    backgroundColor: '#f8f8f8',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  expenseTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  expenseMeta: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+    marginTop: 40,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
   input: {
     borderWidth: 1,
-    padding: 8,
-    marginBottom: 10,
+    borderColor: '#ccc',
     borderRadius: 6,
+    padding: 10,
+    marginBottom: 10,
+  },
+  addButton: {
+    backgroundColor: '#007bff',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+  },
+  addButtonText: {
+    fontSize: 28,
+    color: '#fff',
   },
 });
