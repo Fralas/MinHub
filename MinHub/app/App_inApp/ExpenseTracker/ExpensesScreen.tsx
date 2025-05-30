@@ -21,7 +21,7 @@ interface Expense {
   title: string;
   amount: number;
   category: string;
-  timestamp: string;
+  timestamp: string; //MM/DD/YYYY
 }
 
 const categories = ['All', 'Food', 'Transport', 'Health', 'Entertainment', 'Other'];
@@ -67,8 +67,8 @@ const ExpensesScreen = () => {
       timestamp: new Date().toLocaleDateString(),
     };
 
+
     const updatedExpenses = [...expenses, newExpense];
-    await AsyncStorage.setItem('expenses', JSON.stringify(updatedExpenses));
     await saveExpenses(updatedExpenses);
 
     setModalVisible(false);
@@ -134,6 +134,18 @@ const ExpensesScreen = () => {
     return categoryMatch && dateMatch;
   });
 
+  const getMonthlyTotals = () => {
+    const monthlyMap: { [month: string]: number } = {};
+    for (const exp of filteredExpenses) {
+      const [month, , year] = exp.timestamp.split('/');
+      const label = `${month.padStart(2, '0')}/${year}`;
+      monthlyMap[label] = (monthlyMap[label] || 0) + exp.amount;
+    }
+    return Object.entries(monthlyMap).sort();
+  };
+
+  const monthlyTotals = getMonthlyTotals();
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Expenses</Text>
@@ -183,6 +195,7 @@ const ExpensesScreen = () => {
           />
         )}
 
+
         <TouchableOpacity
           onPress={() => {
             setFilterCategory('All');
@@ -191,6 +204,15 @@ const ExpensesScreen = () => {
         >
           <Text style={{ color: '#007bff', marginBottom: 10 }}>Clear Filters</Text>
         </TouchableOpacity>
+
+        {monthlyTotals.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Monthly Totals:</Text>
+            {monthlyTotals.map(([month, total]) => (
+              <Text key={month}>{month}: ${total.toFixed(2)}</Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Export and Clear Buttons */}
