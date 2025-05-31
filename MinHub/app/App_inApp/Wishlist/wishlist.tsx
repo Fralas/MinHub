@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  SectionList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
@@ -16,17 +17,24 @@ interface WishlistItem {
   id: string;
   name: string;
   emoji: string;
+  description: string;
+  desireLevel: number;
+  category: string;
 }
 
-const STORAGE_KEY = '@wishlist_items_v1';
+const STORAGE_KEY = '@wishlist_items_v2';
 
-const EMOJIS = ['🍕', '🎸', '📚', '🎮', '✈️', '🎧', '📷', '🎨', '🏔️', '🌟', '💻', '🧸', '❤', '🚗'];
+const EMOJIS = ['🍕', '🎸', '📚', '🎮', '✈️', '🎧', '📷', '🎨', '🏔️', '🌟', '💻', '🧸', '❤️', '🚗'];
+const CATEGORIES = ['Food', 'Music', 'Books', 'Games', 'Travel', 'Tech', 'Toys', 'Other'];
 
 export default function Wishlist() {
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState<string>('⭐');
+  const [newDescription, setNewDescription] = useState('');
+  const [newDesireLevel, setNewDesireLevel] = useState('5');
+  const [selectedEmoji, setSelectedEmoji] = useState<string>('🌟');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Other');
 
   const loadWishlist = useCallback(async () => {
     const data = await AsyncStorage.getItem(STORAGE_KEY);
@@ -41,16 +49,28 @@ export default function Wishlist() {
 
   const handleAddItem = () => {
     if (!newName.trim()) return;
+
     const newItem: WishlistItem = {
       id: Date.now().toString(),
       name: newName,
-      emoji: selectedEmoji || '⭐',
+      emoji: selectedEmoji,
+      description: newDescription,
+      desireLevel: parseInt(newDesireLevel),
+      category: selectedCategory,
     };
+
     const updated = [newItem, ...wishlist];
     setWishlist(updated);
     saveWishlist(updated);
+    resetForm();
+  };
+
+  const resetForm = () => {
     setNewName('');
-    setSelectedEmoji('⭐');
+    setNewDescription('');
+    setNewDesireLevel('5');
+    setSelectedEmoji('🌟');
+    setSelectedCategory('Other');
     setModalVisible(false);
   };
 
@@ -60,23 +80,35 @@ export default function Wishlist() {
     }, [loadWishlist])
   );
 
+  const groupedWishlist = CATEGORIES.map((category) => ({
+    title: category,
+    data: wishlist.filter((item) => item.category === category),
+  })).filter((section) => section.data.length > 0);
+
   const renderItem = ({ item }: { item: WishlistItem }) => (
     <View style={styles.item}>
       <Text style={styles.itemText}>
-        {item.emoji} {item.name}
+        {item.emoji} {item.name} ({item.desireLevel}/10)
       </Text>
+      <Text style={styles.descriptionText}>{item.description}</Text>
     </View>
+  );
+
+  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
+    <Text style={styles.sectionHeader}>{section.title}</Text>
   );
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>My Wishlist</Text>
-      {wishlist.length === 0 ? (
+
+      {groupedWishlist.length === 0 ? (
         <Text style={styles.emptyText}>No items yet. Tap '+' to add one!</Text>
       ) : (
-        <FlatList
-          data={wishlist}
+        <SectionList
+          sections={groupedWishlist}
           renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
         />
@@ -104,6 +136,20 @@ export default function Wishlist() {
               value={newName}
               onChangeText={setNewName}
             />
+            <TextInput
+              style={styles.input}
+              placeholder="Description"
+              value={newDescription}
+              onChangeText={setNewDescription}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="How much do you want it? (1-10)"
+              keyboardType="numeric"
+              value={newDesireLevel}
+              onChangeText={setNewDesireLevel}
+            />
+
             <Text style={styles.subheading}>Pick an Emoji:</Text>
             <View style={styles.emojiGrid}>
               {EMOJIS.map((emoji) => (
@@ -116,6 +162,22 @@ export default function Wishlist() {
                   ]}
                 >
                   <Text style={styles.emojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.subheading}>Choose a Category:</Text>
+            <View style={styles.emojiGrid}>
+              {CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setSelectedCategory(cat)}
+                  style={[
+                    styles.emojiButton,
+                    selectedCategory === cat && styles.selectedEmoji,
+                  ]}
+                >
+                  <Text style={styles.emojiText}>{cat}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -151,11 +213,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
+  sectionHeader: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginTop: 10,
+    borderRadius: 5,
+  },
   item: {
     backgroundColor: '#fff',
     padding: 15,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -163,7 +234,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   itemText: {
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
   },
   addButton: {
     position: 'absolute',
@@ -219,7 +296,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emojiButton: {
-    padding: 1,
+    padding: 5,
     margin: 5,
     borderRadius: 8,
     backgroundColor: '#eee',
@@ -228,7 +305,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#cdeaff',
   },
   emojiText: {
-    fontSize: 24,
+    fontSize: 20,
   },
   confirmButton: {
     backgroundColor: '#007AFF',
