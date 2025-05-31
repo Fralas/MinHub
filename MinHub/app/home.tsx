@@ -74,6 +74,7 @@ const allAppFeatures: AppFeature[] = [
   { id: 'pomodoro', name: 'Pomostudy', href: '/App_inApp/Pomodoro/pomodoro', iconName: 'timer-outline' },
   { id: 'memory', name: 'Memory', href: '/App_inApp/Memory/MemoryGame', iconName: 'game-controller-outline' },
   { id: 'expense', name: 'Expense Tracker', href: '/App_inApp/ExpenseTracker/ExpensesScreen', iconName: 'cash-outline' },
+  { id: 'wishlist', name: 'Wishlist', href: '/App_inApp/Wishlist/wishlist', iconName: 'basket-outline' },
 ];
 
 function useAppInitialData() {
@@ -135,7 +136,7 @@ export default function HomeScreen() {
           if (userProfile.profession === '🧑‍🎓 Student' && (feature.id === 'studyPlanner' || feature.id === 'pomodoro' || feature.id === 'notes')) {
             relevance = 10;
           }
-          if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory')) {
+          if (userProfile.reasonForUse === '🧘‍♀️ Reduce stress' && (feature.id === 'meditation' || feature.id === 'diary' || feature.id === 'sleepHelper' || feature.id === 'drink' || feature.id === 'memory') || feature.id === 'wishlist') {
             relevance = 10;
           }
           if (userProfile.reasonForUse === '💪 Increase productivity' && (feature.id === 'todo' || feature.id === 'pomodoro' || feature.id === 'studyPlanner')) {
