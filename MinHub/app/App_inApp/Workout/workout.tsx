@@ -23,14 +23,20 @@ type WorkoutPlan = {
   durationSeconds: number;
 };
 
-export default function WorkoutPlansScreen() {
+// Add this prop type if you're using navigation
+interface WorkoutPlansScreenProps {
+  navigation?: any; // Replace with proper navigation type if using React Navigation
+  onNavigateToHistory?: () => void; // Alternative callback prop
+}
+
+export default function WorkoutPlansScreen({ navigation, onNavigateToHistory }: WorkoutPlansScreenProps = {}) {
   const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [templatesModalVisible, setTemplatesModalVisible] = useState(false);
   const [planName, setPlanName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
-  const [durationInput, setDurationInput] = useState(""); // input for workout duration in minutes
+  const [durationInput, setDurationInput] = useState("");
   const [nextId, setNextId] = useState(1);
 
   // Template filtering states
@@ -58,6 +64,20 @@ export default function WorkoutPlansScreen() {
     { label: "Intermediate", value: "intermediate" },
     { label: "Advanced", value: "advanced" },
   ];
+
+  // Handle navigation to workout history
+  const handleNavigateToHistory = () => {
+    if (navigation) {
+      // If using React Navigation
+      navigation.navigate('WorkoutHistory');
+    } else if (onNavigateToHistory) {
+      // If using callback prop
+      onNavigateToHistory();
+    } else {
+      // Fallback alert
+      Alert.alert('Navigation', 'Navigation to workout history would occur here');
+    }
+  };
 
   // Filter templates based on selected criteria
   const getFilteredTemplates = () => {
@@ -173,6 +193,18 @@ export default function WorkoutPlansScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header with History Button */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Workout Plans</Text>
+        <TouchableOpacity
+          style={styles.historyHeaderButton}
+          onPress={handleNavigateToHistory}
+        >
+          <Ionicons name="time-outline" size={24} color="white" />
+          <Text style={styles.historyButtonText}>History</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={workoutPlans}
         keyExtractor={(item) => item.id.toString()}
@@ -202,6 +234,14 @@ export default function WorkoutPlansScreen() {
 
       {/* Main Action Buttons */}
       <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.historyButton]}
+          onPress={handleNavigateToHistory}
+        >
+          <Ionicons name="time-outline" size={24} color="white" />
+          <Text style={styles.actionButtonText}>History</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.actionButton, styles.templatesButton]}
           onPress={() => setTemplatesModalVisible(true)}
@@ -333,6 +373,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: "#f5f5f5",
   },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  historyHeaderButton: {
+    backgroundColor: "#6C5CE7",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  historyButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
   planContainer: {
     backgroundColor: "white",
     padding: 16,
@@ -409,6 +480,9 @@ const styles = StyleSheet.create({
   },
   templatesButton: {
     backgroundColor: "#2196F3",
+  },
+  historyButton: {
+    backgroundColor: "#6C5CE7",
   },
   actionButtonText: {
     color: "white",
