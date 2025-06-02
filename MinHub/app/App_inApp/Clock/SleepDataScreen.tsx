@@ -14,7 +14,7 @@ import { useSleepData } from './alarm';
 import { MessageModal, ConfirmationModal } from './alarm'; 
 
 
-  const SleepDataScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [selectedDate, setSelectedDate] = useState(new Date());
+  export const SleepDataScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [selectedDate, setSelectedDate] = useState(new Date());
   const [sleepTime, setSleepTime] = useState(new Date());
   const [wakeUpTime, setWakeUpTime] = useState(new Date());
 

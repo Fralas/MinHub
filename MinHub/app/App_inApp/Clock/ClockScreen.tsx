@@ -17,7 +17,7 @@ import { useAlarms } from './alarm';
 import { MessageModal, ConfirmationModal } from './alarm';
 
 
-  const ClockScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [currentTime, setCurrentTime] = useState(getFormattedTime());
+  export const ClockScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [currentTime, setCurrentTime] = useState(getFormattedTime());
   const [modalVisible, setModalVisible] = useState(false);
   const [alarmName, setAlarmName] = useState('');
   const [alarmTime, setAlarmTime] = useState<Date | null>(null);
