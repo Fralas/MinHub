@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useAlarms } from './alarm';  // Import the hook
+import { useAlarms } from './alarm'; 
 
 export default function ClockScreen() {
   const [currentTime, setCurrentTime] = useState(getFormattedTime());
@@ -26,22 +26,19 @@ export default function ClockScreen() {
   const [editingAlarmId, setEditingAlarmId] = useState<string | null>(null);
   const { width, height } = Dimensions.get('window');
 
-  // Use the alarms hook
   const {
     alarms,
     handleAddOrUpdateAlarm,
     handleToggleAlarm,
     handleDeleteAlarm,
-    checkAlarms,
   } = useAlarms();
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(getFormattedTime());
-      checkAlarms();
-    }, 1000); // Check every second
+    }, 1000);
     return () => clearInterval(interval);
-  }, [alarms]);
+  }, []);
 
   function getFormattedTime() {
     const now = new Date();
@@ -50,6 +47,27 @@ export default function ClockScreen() {
       minute: '2-digit',
     });
   }
+
+  const handleSaveAlarm = () => {
+    if (!alarmName.trim()) {
+      Alert.alert('Error', 'Please enter an alarm name');
+      return;
+    }
+    if (!alarmTime) {
+      Alert.alert('Error', 'Please select a time');
+      return;
+    }
+
+    handleAddOrUpdateAlarm(editingAlarmId, {
+      name: alarmName,
+      time: alarmTime,
+    });
+
+    setAlarmName('');
+    setAlarmTime(null);
+    setEditingAlarmId(null);
+    setModalVisible(false);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -74,14 +92,33 @@ export default function ClockScreen() {
                       })
                     : 'Set time'}
                 </Text>
+                {item.isSnoozing && (
+                  <Text style={styles.snoozeText}>
+                    Snoozing until {item.snoozeUntil?.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                )}
               </View>
               <View style={styles.alarmActions}>
                 <Switch
                   value={item.active}
                   onValueChange={() => handleToggleAlarm(item.id)}
                 />
-                <TouchableOpacity onPress={() => handleDeleteAlarm(item.id)}>
-                  <Text style={styles.deleteButton}>x</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete Alarm',
+                      'Are you sure you want to delete this alarm?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteAlarm(item.id) }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.deleteButton}>🗑️</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   setAlarmName(item.name);
@@ -89,11 +126,17 @@ export default function ClockScreen() {
                   setEditingAlarmId(item.id);
                   setModalVisible(true);
                 }}>
-                  <Text style={styles.editButton}>🔧</Text>
+                  <Text style={styles.editButton}>✏️</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No alarms set</Text>
+              <Text style={styles.emptySubtext}>Tap the + button to add your first alarm</Text>
+            </View>
+          }
         />
       </View>
 
@@ -122,9 +165,10 @@ export default function ClockScreen() {
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="Alarm name"
+              placeholder="Alarm name (e.g., Wake Up, Meeting)"
               value={alarmName}
               onChangeText={setAlarmName}
+              maxLength={50}
             />
             <TouchableOpacity
               style={styles.timePickerButton}
@@ -151,7 +195,6 @@ export default function ClockScreen() {
                   if (event.type === 'set' && selectedDate) {
                     setAlarmTime(selectedDate);
                   } else if (event.type === 'dismissed') {
-                    setAlarmTime(null);
                   }
                   setShowTimePicker(false);
                 }}
@@ -159,11 +202,20 @@ export default function ClockScreen() {
             )}
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity 
+                style={styles.cancelButtonContainer}
+                onPress={() => {
+                  setAlarmName('');
+                  setAlarmTime(null);
+                  setEditingAlarmId(null);
+                  setModalVisible(false);
+                }}
+              >
                 <Text style={styles.cancelButton}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleAddOrUpdateAlarm(editingAlarmId, alarmName, alarmTime)}
+                style={styles.addButtonContainer}
+                onPress={handleSaveAlarm}
               >
                 <Text style={styles.addButton}>
                   {editingAlarmId ? 'Update' : 'Add'}
@@ -193,19 +245,32 @@ const styles = StyleSheet.create({
   },
   alarmName: { fontSize: 18, fontWeight: '500' },
   alarmTime: { fontSize: 16, color: '#666' },
+  snoozeText: { fontSize: 14, color: '#ff9500', fontStyle: 'italic' },
   alarmActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 15,
   },
   deleteButton: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#ff3b30',
-    marginLeft: 10,
   },
   editButton: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#007AFF',
+  },
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 5,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
   },
   floatingButton: {
     backgroundColor: '#007AFF',
@@ -218,6 +283,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   modalContainer: {
     flex: 1,
@@ -234,22 +303,35 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     marginBottom: 15,
+    fontSize: 16,
   },
   timePickerButton: {
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
     marginBottom: 20,
+    backgroundColor: '#f8f8f8',
   },
   timePickerText: { fontSize: 16 },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  cancelButtonContainer: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  addButtonContainer: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
   },
   cancelButton: { color: '#888', fontSize: 16 },
-  addButton: { color: '#007AFF', fontSize: 16, fontWeight: 'bold' },
+  addButton: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
