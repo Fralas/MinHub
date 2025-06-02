@@ -66,7 +66,7 @@ const allAppFeatures: AppFeature[] = [
   { id: 'foodScheduler', name: 'Food', href: '/App_inApp/Food/foodScheduler', iconName: 'restaurant-outline' },
   { id: 'drink', name: 'ReDrink', href: '/App_inApp/DrinkReminder/DrinkReminder', iconName: 'water-outline' },
   { id: 'calendar', name: 'Calendar', href: '/App_inApp/Calendar/calendar', iconName: 'calendar-number-outline' },
-  { id: 'clock', name: 'Clock', href: '/App_inApp/Clock/clock', iconName: 'time-outline' },
+  { id: 'clock', name: 'Clock', href: '/App_inApp/Clock/ClockScreen', iconName: 'time-outline' },
   { id: 'workout', name: 'Workout', href: '/App_inApp/Workout/workout', iconName: 'barbell-outline' },
   { id: 'countdown', name: 'Countdown', href: '/App_inApp/Countdown/countdown', iconName: 'hourglass-outline' },
   { id: 'sleepHelper', name: 'Sleep Helper', href: '/App_inApp/SleepHelper/sleep-helper', iconName: 'moon-outline' },

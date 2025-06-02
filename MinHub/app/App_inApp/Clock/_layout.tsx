@@ -1,22 +1,22 @@
-import React, { useState, useCallback } from 'react';
-import { View } from 'react-native';
-import { ClockScreen } from './ClockScreen';
-import { SleepDataScreen } from './SleepDataScreen'; 
+import { Stack } from 'expo-router';
+import React from 'react'; 
 
-export default function App() {  
-  const [currentScreen, setCurrentScreen] = useState<'clock' | 'sleepData'>('clock');
-  const navigateTo = useCallback((screen: 'clock' | 'sleepData') => {
-    setCurrentScreen(screen);
-  }, []);
-
+export default function ClockLayout() {
   return (
-    <View style={{ flex: 1 }}>
-      {/* Conditionally render ClockScreen or SleepDataScreen based on currentScreen state */}
-      {currentScreen === 'clock' ? (
-        <ClockScreen navigateTo={navigateTo} />
-      ) : (
-        <SleepDataScreen navigateTo={navigateTo} />
-      )}
-    </View>
+    <Stack>
+      <Stack.Screen
+        name="ClockScreen"
+        options={{
+          headerShown: false, 
+        }}
+      />
+
+      <Stack.Screen
+        name="SleepDataScreen"
+        options={{
+          headerShown: false, 
+        }}
+      />
+    </Stack>
   );
 }

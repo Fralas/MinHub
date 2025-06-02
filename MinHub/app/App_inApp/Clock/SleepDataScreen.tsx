@@ -10,11 +10,12 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useSleepData } from './alarm'; 
-import { MessageModal, ConfirmationModal } from './alarm'; 
+import { useSleepData } from './alarm';
+import { MessageModal, ConfirmationModal } from './alarm';
+import { useRouter } from 'expo-router'; 
 
-
-  export const SleepDataScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [selectedDate, setSelectedDate] = useState(new Date());
+const SleepDataScreen: React.FC = () => { 
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [sleepTime, setSleepTime] = useState(new Date());
   const [wakeUpTime, setWakeUpTime] = useState(new Date());
 
@@ -25,7 +26,8 @@ import { MessageModal, ConfirmationModal } from './alarm';
   const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
   const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
 
-  
+  const router = useRouter(); 
+
   const {
     sleepEntries,
     addSleepEntry,
@@ -43,7 +45,7 @@ import { MessageModal, ConfirmationModal } from './alarm';
       day: 'numeric',
     });
   };
-  
+
   const getFormattedTime = (time: Date) => {
     return time.toLocaleTimeString([], {
       hour: '2-digit',
@@ -59,7 +61,7 @@ import { MessageModal, ConfirmationModal } from './alarm';
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         {/* Back button to return to ClockScreen */}
-        <TouchableOpacity style={styles.backButton} onPress={() => navigateTo('clock')}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={28} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.title}>Sleep Data Input</Text>
@@ -68,7 +70,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
       <View style={styles.body}>
         <Text style={styles.sectionTitle}>Record Your Sleep</Text>
 
-        {/* Date Picker for sleep entry */}
         <TouchableOpacity style={styles.inputButton} onPress={() => setShowDatePicker(true)}>
           <Text style={styles.inputButtonText}>Date: {getFormattedDate(selectedDate)}</Text>
         </TouchableOpacity>
@@ -86,7 +87,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
           />
         )}
 
-        {/* Sleep Time Picker */}
         <TouchableOpacity style={styles.inputButton} onPress={() => setShowSleepTimePicker(true)}>
           <Text style={styles.inputButtonText}>Sleep Time: {getFormattedTime(sleepTime)}</Text>
         </TouchableOpacity>
@@ -105,7 +105,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
           />
         )}
 
-        {/* Wake Up Time Picker */}
         <TouchableOpacity style={styles.inputButton} onPress={() => setShowWakeUpTimePicker(true)}>
           <Text style={styles.inputButtonText}>Wake Up Time: {getFormattedTime(wakeUpTime)}</Text>
         </TouchableOpacity>
@@ -124,13 +123,11 @@ import { MessageModal, ConfirmationModal } from './alarm';
           />
         )}
 
-        {/* Button to add the sleep entry */}
         <TouchableOpacity style={styles.saveButton} onPress={handleAddSleepEntry}>
           <Text style={styles.saveButtonText}>Add Sleep Entry</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Your Sleep History</Text>
-        {/* FlatList to display recorded sleep entries */}
         <FlatList
           data={sleepEntries}
           keyExtractor={(item) => item.id}
@@ -143,11 +140,10 @@ import { MessageModal, ConfirmationModal } from './alarm';
                 </Text>
                 <Text style={styles.sleepEntryDuration}>Duration: {item.durationMinutes} min</Text>
               </View>
-              {/* Delete sleep entry button */}
               <TouchableOpacity
                 onPress={() => {
                   setEntryToDeleteId(item.id);
-                  setConfirmationModalVisible(true); // Show confirmation modal
+                  setConfirmationModalVisible(true);
                 }}
               >
                 <Text style={styles.deleteButton}>🗑️</Text>
@@ -170,7 +166,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
         </View>
       </View>
 
-      {/* Message Modal for errors/information */}
       <MessageModal
         visible={messageModalVisible}
         title={messageModalContent.title}
@@ -178,7 +173,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
         onClose={() => setMessageModalVisible(false)}
       />
 
-      {/* Confirmation Modal for deleting sleep entries */}
       <ConfirmationModal
         visible={confirmationModalVisible}
         title="Delete Sleep Entry"
@@ -199,10 +193,12 @@ import { MessageModal, ConfirmationModal } from './alarm';
   );
 };
 
+export default SleepDataScreen; 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#f0f2f5', 
   },
   header: {
     paddingTop: Platform.OS === 'android' ? 50 : 20,
@@ -321,7 +317,7 @@ const styles = StyleSheet.create({
   },
   sleepDataButton: {
     right: 90, 
-    backgroundColor: '#5856D6',
+    backgroundColor: '#5856D6', 
   },
   modalContainer: {
     flex: 1,

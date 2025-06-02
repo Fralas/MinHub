@@ -13,11 +13,12 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useAlarms } from './alarm'; 
+import { useAlarms } from './alarm';
 import { MessageModal, ConfirmationModal } from './alarm';
+import { useRouter } from 'expo-router'; 
 
-
-  export const ClockScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [currentTime, setCurrentTime] = useState(getFormattedTime());
+const ClockScreen: React.FC = () => { 
+  const [currentTime, setCurrentTime] = useState(getFormattedTime());
   const [modalVisible, setModalVisible] = useState(false);
   const [alarmName, setAlarmName] = useState('');
   const [alarmTime, setAlarmTime] = useState<Date | null>(null);
@@ -26,6 +27,8 @@ import { MessageModal, ConfirmationModal } from './alarm';
 
   const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
   const [alarmToDeleteId, setAlarmToDeleteId] = useState<string | null>(null);
+
+  const router = useRouter(); 
 
   const {
     alarms,
@@ -37,12 +40,11 @@ import { MessageModal, ConfirmationModal } from './alarm';
     setMessageModalVisible,
   } = useAlarms();
 
-  
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(getFormattedTime());
     }, 1000);
-    return () => clearInterval(interval); 
+    return () => clearInterval(interval);
   }, []);
 
   function getFormattedTime() {
@@ -53,7 +55,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
     });
   }
 
-
   const handleSaveAlarm = () => {
     if (!alarmName.trim()) {
       setMessageModalVisible(true);
@@ -62,7 +63,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
       return;
     }
     if (!alarmTime) {
-
       setMessageModalVisible(true);
       messageModalContent.title = 'Error';
       messageModalContent.message = 'Please select a time';
@@ -88,7 +88,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
 
       <View style={styles.body}>
         <Text style={styles.title}>Wake Up Calls</Text>
-        {/* FlatList to display the list of alarms */}
         <FlatList
           data={alarms}
           keyExtractor={(item) => item.id}
@@ -114,12 +113,10 @@ import { MessageModal, ConfirmationModal } from './alarm';
                 )}
               </View>
               <View style={styles.alarmActions}>
-                {/* Switch to toggle alarm active state */}
                 <Switch
                   value={item.active}
                   onValueChange={() => handleToggleAlarm(item.id)}
                 />
-                {/* Delete alarm button */}
                 <TouchableOpacity
                   onPress={() => {
                     setAlarmToDeleteId(item.id);
@@ -128,7 +125,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
                 >
                   <Text style={styles.deleteButton}>🗑️</Text>
                 </TouchableOpacity>
-                {/* Edit alarm button */}
                 <TouchableOpacity onPress={() => {
                   setAlarmName(item.name);
                   setAlarmTime(item.time);
@@ -149,7 +145,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
         />
       </View>
 
-      {/* Floating Add Alarm Button */}
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => {
@@ -165,12 +160,11 @@ import { MessageModal, ConfirmationModal } from './alarm';
       {/* Floating Sleep Data Button */}
       <TouchableOpacity
         style={[styles.floatingButton, styles.sleepDataButton]}
-        onPress={() => navigateTo('sleepData')}
+        onPress={() => router.push('./SleepDataScreen')} 
       >
         <Ionicons name="moon" size={28} color="white" />
       </TouchableOpacity>
 
-      {/* Add/Edit Alarm Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -244,7 +238,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
         </View>
       </Modal>
 
-      {/* Message Modal for errors/information */}
       <MessageModal
         visible={messageModalVisible}
         title={messageModalContent.title}
@@ -252,7 +245,6 @@ import { MessageModal, ConfirmationModal } from './alarm';
         onClose={() => setMessageModalVisible(false)}
       />
 
-      {/* Confirmation Modal for deleting alarms */}
       <ConfirmationModal
         visible={confirmationModalVisible}
         title="Delete Alarm"
@@ -272,6 +264,8 @@ import { MessageModal, ConfirmationModal } from './alarm';
     </SafeAreaView>
   );
 };
+
+export default ClockScreen; 
 
 const styles = StyleSheet.create({
   container: {
@@ -395,7 +389,7 @@ const styles = StyleSheet.create({
   },
   sleepDataButton: {
     right: 90, 
-    backgroundColor: '#5856D6',
+    backgroundColor: '#5856D6', 
   },
   modalContainer: {
     flex: 1,
@@ -483,7 +477,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   saveButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#28a745', 
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: 'center',
