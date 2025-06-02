@@ -10,34 +10,39 @@ import {
   FlatList,
   Switch,
   Platform,
-  Dimensions,
-  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAlarms } from './alarm'; 
+import { MessageModal, ConfirmationModal } from './alarm';
 
-export default function ClockScreen() {
-  const [currentTime, setCurrentTime] = useState(getFormattedTime());
+
+  const ClockScreen: React.FC<{ navigateTo: (screen: 'clock' | 'sleepData') => void }> = ({ navigateTo }) => {  const [currentTime, setCurrentTime] = useState(getFormattedTime());
   const [modalVisible, setModalVisible] = useState(false);
   const [alarmName, setAlarmName] = useState('');
   const [alarmTime, setAlarmTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [editingAlarmId, setEditingAlarmId] = useState<string | null>(null);
-  const { width, height } = Dimensions.get('window');
+
+  const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
+  const [alarmToDeleteId, setAlarmToDeleteId] = useState<string | null>(null);
 
   const {
     alarms,
     handleAddOrUpdateAlarm,
     handleToggleAlarm,
     handleDeleteAlarm,
+    messageModalVisible,
+    messageModalContent,
+    setMessageModalVisible,
   } = useAlarms();
 
+  
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(getFormattedTime());
     }, 1000);
-    return () => clearInterval(interval);
+    return () => clearInterval(interval); 
   }, []);
 
   function getFormattedTime() {
@@ -48,13 +53,19 @@ export default function ClockScreen() {
     });
   }
 
+
   const handleSaveAlarm = () => {
     if (!alarmName.trim()) {
-      Alert.alert('Error', 'Please enter an alarm name');
+      setMessageModalVisible(true);
+      messageModalContent.title = 'Error';
+      messageModalContent.message = 'Please enter an alarm name';
       return;
     }
     if (!alarmTime) {
-      Alert.alert('Error', 'Please select a time');
+
+      setMessageModalVisible(true);
+      messageModalContent.title = 'Error';
+      messageModalContent.message = 'Please select a time';
       return;
     }
 
@@ -77,6 +88,7 @@ export default function ClockScreen() {
 
       <View style={styles.body}>
         <Text style={styles.title}>Wake Up Calls</Text>
+        {/* FlatList to display the list of alarms */}
         <FlatList
           data={alarms}
           keyExtractor={(item) => item.id}
@@ -102,24 +114,21 @@ export default function ClockScreen() {
                 )}
               </View>
               <View style={styles.alarmActions}>
+                {/* Switch to toggle alarm active state */}
                 <Switch
                   value={item.active}
                   onValueChange={() => handleToggleAlarm(item.id)}
                 />
-                <TouchableOpacity 
+                {/* Delete alarm button */}
+                <TouchableOpacity
                   onPress={() => {
-                    Alert.alert(
-                      'Delete Alarm',
-                      'Are you sure you want to delete this alarm?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteAlarm(item.id) }
-                      ]
-                    );
+                    setAlarmToDeleteId(item.id);
+                    setConfirmationModalVisible(true);
                   }}
                 >
                   <Text style={styles.deleteButton}>🗑️</Text>
                 </TouchableOpacity>
+                {/* Edit alarm button */}
                 <TouchableOpacity onPress={() => {
                   setAlarmName(item.name);
                   setAlarmTime(item.time);
@@ -140,6 +149,7 @@ export default function ClockScreen() {
         />
       </View>
 
+      {/* Floating Add Alarm Button */}
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => {
@@ -152,6 +162,15 @@ export default function ClockScreen() {
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>
 
+      {/* Floating Sleep Data Button */}
+      <TouchableOpacity
+        style={[styles.floatingButton, styles.sleepDataButton]}
+        onPress={() => navigateTo('sleepData')}
+      >
+        <Ionicons name="moon" size={28} color="white" />
+      </TouchableOpacity>
+
+      {/* Add/Edit Alarm Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -194,7 +213,6 @@ export default function ClockScreen() {
                 onChange={(event, selectedDate) => {
                   if (event.type === 'set' && selectedDate) {
                     setAlarmTime(selectedDate);
-                  } else if (event.type === 'dismissed') {
                   }
                   setShowTimePicker(false);
                 }}
@@ -202,7 +220,7 @@ export default function ClockScreen() {
             )}
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelButtonContainer}
                 onPress={() => {
                   setAlarmName('');
@@ -225,52 +243,139 @@ export default function ClockScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Message Modal for errors/information */}
+      <MessageModal
+        visible={messageModalVisible}
+        title={messageModalContent.title}
+        message={messageModalContent.message}
+        onClose={() => setMessageModalVisible(false)}
+      />
+
+      {/* Confirmation Modal for deleting alarms */}
+      <ConfirmationModal
+        visible={confirmationModalVisible}
+        title="Delete Alarm"
+        message="Are you sure you want to delete this alarm?"
+        onConfirm={() => {
+          if (alarmToDeleteId) {
+            handleDeleteAlarm(alarmToDeleteId);
+          }
+          setConfirmationModalVisible(false);
+          setAlarmToDeleteId(null);
+        }}
+        onCancel={() => {
+          setConfirmationModalVisible(false);
+          setAlarmToDeleteId(null);
+        }}
+      />
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { alignItems: 'center', marginTop: 40 },
-  clockText: { fontSize: 48, fontWeight: 'bold', color: '#333' },
-  body: { flex: 1, padding: 20 },
-  title: { fontSize: 26, marginBottom: 10, fontWeight: '600' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f0f2f5', 
+  },
+  header: {
+    paddingTop: Platform.OS === 'android' ? 50 : 20,
+    paddingBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    flexDirection: 'row',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    padding: 10,
+  },
+  clockText: {
+    fontSize: 56,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'Roboto',
+  },
+  body: {
+    flex: 1,
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 10,
+  },
   alarmItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  alarmName: { fontSize: 18, fontWeight: '500' },
-  alarmTime: { fontSize: 16, color: '#666' },
-  snoozeText: { fontSize: 14, color: '#ff9500', fontStyle: 'italic' },
+  alarmName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+  },
+  alarmTime: {
+    fontSize: 18,
+    color: '#666',
+    marginTop: 2,
+  },
+  snoozeText: {
+    fontSize: 14,
+    color: '#ff9500',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
   alarmActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 15,
   },
   deleteButton: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#ff3b30',
   },
   editButton: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#007AFF',
   },
   emptyState: {
     alignItems: 'center',
     marginTop: 50,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 18,
     color: '#666',
     marginBottom: 5,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     color: '#999',
+    textAlign: 'center',
   },
   floatingButton: {
     backgroundColor: '#007AFF',
@@ -282,56 +387,166 @@ const styles = StyleSheet.create({
     bottom: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  sleepDataButton: {
+    right: 90, 
+    backgroundColor: '#5856D6',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#00000088',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     padding: 20,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
-  modalTitle: { fontSize: 20, marginBottom: 15, fontWeight: 'bold' },
+  modalTitle: {
+    fontSize: 24,
+    marginBottom: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#333',
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
+    borderColor: '#ccc',
+    padding: 15,
+    borderRadius: 10,
     marginBottom: 15,
-    fontSize: 16,
+    fontSize: 18,
+    backgroundColor: '#f9f9f9',
   },
   timePickerButton: {
-    padding: 12,
+    padding: 15,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderColor: '#ccc',
+    borderRadius: 10,
     marginBottom: 20,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#f9f9f9',
+    alignItems: 'center',
   },
-  timePickerText: { fontSize: 16 },
+  inputButton: {
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    marginBottom: 15,
+    backgroundColor: '#f9f9f9',
+    alignItems: 'flex-start',
+  },
+  inputButtonText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  timePickerText: {
+    fontSize: 18,
+    color: '#333',
+  },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     marginTop: 10,
   },
   cancelButtonContainer: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    backgroundColor: '#e0e0e0',
   },
   addButtonContainer: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
     backgroundColor: '#007AFF',
-    borderRadius: 8,
+    borderRadius: 10,
   },
-  cancelButton: { color: '#888', fontSize: 16 },
-  addButton: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  cancelButton: {
+    color: '#666',
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  addButton: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  saveButton: {
+    backgroundColor: '#28a745',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  sleepEntryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  sleepEntryDate: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  sleepEntryTimes: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 2,
+  },
+  sleepEntryDuration: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+    marginTop: 5,
+  },
+  suggestionBox: {
+    backgroundColor: '#e6f7ff',
+    borderRadius: 12,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#91d5ff',
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  suggestionText: {
+    fontSize: 16,
+    color: '#1890ff',
+    lineHeight: 24,
+  },
 });
