@@ -1,4 +1,13 @@
-# Prerequisites
+
+# APK v1.1 (latest):
+https://expo.dev/accounts/memma/projects/MinHub/builds/a281a021-533c-43e9-b93e-820fea529e73
+
+
+---
+
+# IF YOU WANT TO TRY FROM EMULATOR WITH SOURCE CODE:
+
+ Prerequisites
 Before getting started, make sure you have the following installed:
 1. Node.js (LTS Version) 
 
