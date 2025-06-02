@@ -23,10 +23,9 @@ type WorkoutPlan = {
   durationSeconds: number;
 };
 
-// Add this prop type if you're using navigation
 interface WorkoutPlansScreenProps {
-  navigation?: any; // Replace with proper navigation type if using React Navigation
-  onNavigateToHistory?: () => void; // Alternative callback prop
+  navigation?: any; 
+  onNavigateToHistory?: () => void;
 }
 
 export default function WorkoutPlansScreen({ navigation, onNavigateToHistory }: WorkoutPlansScreenProps = {}) {
@@ -65,21 +64,18 @@ export default function WorkoutPlansScreen({ navigation, onNavigateToHistory }: 
     { label: "Advanced", value: "advanced" },
   ];
 
-  // Handle navigation to workout history
+  
   const handleNavigateToHistory = () => {
     if (navigation) {
-      // If using React Navigation
       navigation.navigate('WorkoutHistory');
     } else if (onNavigateToHistory) {
-      // If using callback prop
-      onNavigateToHistory();
+        onNavigateToHistory();
     } else {
-      // Fallback alert
       Alert.alert('Navigation', 'Navigation to workout history would occur here');
     }
   };
 
-  // Filter templates based on selected criteria
+  
   const getFilteredTemplates = () => {
     return workoutTemplates.filter(template => {
       const goalMatch = !selectedGoal || template.goal === selectedGoal;
