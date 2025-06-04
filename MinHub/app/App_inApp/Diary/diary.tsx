@@ -15,8 +15,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View, // Importa StyleProp
-  ViewStyle // Importa ViewStyle
+  View,
+  ViewStyle
 } from 'react-native';
 import { generateInkBlots, inkBlotStyle, paperStyles } from './diaryStyles';
 
@@ -355,176 +355,177 @@ export default function DiaryScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={paperStyles.modalOverlay}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0} 
         >
-          <ScrollView
-            contentContainerStyle={paperStyles.modalScrollView}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={paperStyles.modalContent}>
-              <Text style={paperStyles.modalTitle}>{currentEditingEntry ? 'Edit Diary Entry' : 'New Diary Entry'}</Text>
+          <View style={paperStyles.modalContentContainer}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{paddingBottom: 20}} // To ensure last element is not hidden by keyboard
+            >
+              <View style={paperStyles.modalInnerContent}>
+                <Text style={paperStyles.modalTitle}>{currentEditingEntry ? 'Edit Diary Entry' : 'New Diary Entry'}</Text>
 
-              <Text style={paperStyles.formLabel}>Date:</Text>
-              <TouchableOpacity onPress={() => setIsDatePickerVisible(true)} style={paperStyles.formDateButton}>
-                <Text style={paperStyles.formDateButtonText}>{formatDateForDisplay(entryFormDateTime)}</Text>
-              </TouchableOpacity>
-              {isDatePickerVisible && (
-                <DateTimePicker
-                  value={entryFormDateTime}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? "spinner" : "default"}
-                  onChange={handleDateChangeForModal}
+                <Text style={paperStyles.formLabel}>Date:</Text>
+                <TouchableOpacity onPress={() => setIsDatePickerVisible(true)} style={paperStyles.formDateButton}>
+                  <Text style={paperStyles.formDateButtonText}>{formatDateForDisplay(entryFormDateTime)}</Text>
+                </TouchableOpacity>
+                {isDatePickerVisible && (
+                  <DateTimePicker
+                    value={entryFormDateTime}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? "inline" : "default"}
+                    onChange={handleDateChangeForModal}
+                  />
+                )}
+
+                <Text style={paperStyles.formLabel}>Title (Optional):</Text>
+                <TextInput
+                  style={paperStyles.formInput}
+                  placeholder="Entry Title"
+                  value={entryFormTitle}
+                  onChangeText={setEntryFormTitle}
+                  maxLength={MAX_TITLE_LENGTH}
                 />
-              )}
 
-              <Text style={paperStyles.formLabel}>Title (Optional):</Text>
-              <TextInput
-                style={paperStyles.formInput}
-                placeholder="Entry Title"
-                value={entryFormTitle}
-                onChangeText={setEntryFormTitle}
-                maxLength={MAX_TITLE_LENGTH}
-              />
+                <Text style={paperStyles.formLabel}>Content:</Text>
+                <TextInput
+                  style={[paperStyles.formInput, paperStyles.formTextArea]}
+                  placeholder="Write your thoughts..."
+                  value={entryFormContent}
+                  onChangeText={setEntryFormContent}
+                  multiline
+                  maxLength={MAX_CONTENT_LENGTH}
+                />
 
-              <Text style={paperStyles.formLabel}>Content:</Text>
-              <TextInput
-                style={[paperStyles.formInput, paperStyles.formTextArea]}
-                placeholder="Write your thoughts..."
-                value={entryFormContent}
-                onChangeText={setEntryFormContent}
-                multiline
-                numberOfLines={8}
-                maxLength={MAX_CONTENT_LENGTH}
-              />
+                <Text style={paperStyles.formLabel}>How was your day?</Text>
+                <View style={paperStyles.optionsRowContainer}>
+                  {RATING_EMOJIS.map((emoji, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        paperStyles.optionButton,
+                        entryFormDayRating === index + 1 && paperStyles.optionButtonSelected
+                      ]}
+                      onPress={() => setEntryFormDayRating((index + 1) as DayRating)}
+                    >
+                      <Text style={[paperStyles.optionButtonText, paperStyles.ratingEmoji]}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              <Text style={paperStyles.formLabel}>How was your day?</Text>
-              <View style={paperStyles.optionsRowContainer}>
-                {RATING_EMOJIS.map((emoji, index) => (
+                <Text style={paperStyles.formLabel}>Mood:</Text>
+                <View style={paperStyles.optionsWrapContainer}>
+                  {MOOD_OPTIONS.map(mood => (
+                    <TouchableOpacity
+                      key={mood}
+                      style={[
+                        paperStyles.optionButton,
+                        entryFormMood === mood && paperStyles.optionButtonSelected
+                      ]}
+                      onPress={() => setEntryFormMood(mood)}
+                    >
+                      <Text style={[
+                        paperStyles.optionButtonText,
+                        entryFormMood === mood && paperStyles.optionButtonTextSelected
+                      ]}>
+                        {mood}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={paperStyles.formLabel}>Energy Level:</Text>
+                <View style={paperStyles.optionsRowContainer}>
+                  {ENERGY_LEVELS.map(level => (
+                    <TouchableOpacity
+                      key={level}
+                      style={[
+                        paperStyles.optionButton, {flex:1, marginHorizontal: 2},
+                        entryFormEnergyLevel === level && paperStyles.optionButtonSelected
+                      ]}
+                      onPress={() => setEntryFormEnergyLevel(level)}
+                    >
+                      <Text style={[
+                        paperStyles.optionButtonText,
+                        entryFormEnergyLevel === level && paperStyles.optionButtonTextSelected
+                      ]}>
+                        {level}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={paperStyles.formLabel}>Sleep Quality:</Text>
+                <View style={paperStyles.optionsRowContainer}>
+                  {SLEEP_QUALITIES.map(quality => (
+                    <TouchableOpacity
+                      key={quality}
+                      style={[
+                        paperStyles.optionButton, {flex:1, marginHorizontal: 2},
+                        entryFormSleepQuality === quality && paperStyles.optionButtonSelected
+                      ]}
+                      onPress={() => setEntryFormSleepQuality(quality)}
+                    >
+                      <Text style={[
+                        paperStyles.optionButtonText,
+                        entryFormSleepQuality === quality && paperStyles.optionButtonTextSelected
+                      ]}>
+                        {quality}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={paperStyles.formLabel}>Goals Achieved (Optional, comma-separated):</Text>
+                <TextInput
+                  style={paperStyles.formInput}
+                  placeholder="e.g., Exercise, Read, Meditate"
+                  value={entryFormGoalsInput}
+                  onChangeText={setEntryFormGoalsInput}
+                />
+
+                <Text style={paperStyles.formLabel}>Challenges Faced (Optional, comma-separated):</Text>
+                <TextInput
+                  style={paperStyles.formInput}
+                  placeholder="e.g., Work stress, Missed workout"
+                  value={entryFormChallengesInput}
+                  onChangeText={setEntryFormChallengesInput}
+                />
+
+                <Text style={paperStyles.formLabel}>Tags (Optional, comma-separated):</Text>
+                <TextInput
+                  style={paperStyles.formInput}
+                  placeholder="e.g., work, travel, reflection"
+                  value={entryFormTagsInput}
+                  onChangeText={setEntryFormTagsInput}
+                />
+
+                <Text style={paperStyles.formLabel}>Location (Optional):</Text>
+                <TextInput
+                  style={paperStyles.formInput}
+                  placeholder="e.g., Home, Paris"
+                  value={entryFormLocation}
+                  onChangeText={setEntryFormLocation}
+                />
+
+                <View style={paperStyles.modalActions}>
                   <TouchableOpacity
-                    key={index}
-                    style={[
-                      paperStyles.optionButton,
-                      entryFormDayRating === index + 1 && paperStyles.optionButtonSelected
-                    ]}
-                    onPress={() => setEntryFormDayRating((index + 1) as DayRating)}
+                    style={[paperStyles.modalButtonBase, paperStyles.modalSecondaryButton]}
+                    onPress={() => setIsModalEditorOpen(false)}
                   >
-                    <Text style={[paperStyles.optionButtonText, paperStyles.ratingEmoji]}>{emoji}</Text>
+                    <Text style={paperStyles.modalSecondaryButtonText}>Cancel</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={paperStyles.formLabel}>Mood:</Text>
-              <View style={paperStyles.optionsWrapContainer}>
-                {MOOD_OPTIONS.map(mood => (
                   <TouchableOpacity
-                    key={mood}
-                    style={[
-                      paperStyles.optionButton,
-                      entryFormMood === mood && paperStyles.optionButtonSelected
-                    ]}
-                    onPress={() => setEntryFormMood(mood)}
+                    style={[paperStyles.modalButtonBase, paperStyles.primaryButton]}
+                    onPress={processAndSaveDiaryEntry}
                   >
-                    <Text style={[
-                      paperStyles.optionButtonText,
-                      entryFormMood === mood && paperStyles.optionButtonTextSelected
-                    ]}>
-                      {mood}
-                    </Text>
+                    <Text style={paperStyles.buttonText}>{currentEditingEntry ? 'Save Changes' : 'Add Entry'}</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
               </View>
-
-              <Text style={paperStyles.formLabel}>Energy Level:</Text>
-              <View style={paperStyles.optionsRowContainer}>
-                {ENERGY_LEVELS.map(level => (
-                  <TouchableOpacity
-                    key={level}
-                    style={[
-                      paperStyles.optionButton, {flex:1, marginHorizontal: 2},
-                      entryFormEnergyLevel === level && paperStyles.optionButtonSelected
-                    ]}
-                    onPress={() => setEntryFormEnergyLevel(level)}
-                  >
-                    <Text style={[
-                      paperStyles.optionButtonText,
-                      entryFormEnergyLevel === level && paperStyles.optionButtonTextSelected
-                    ]}>
-                      {level}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={paperStyles.formLabel}>Sleep Quality:</Text>
-              <View style={paperStyles.optionsRowContainer}>
-                {SLEEP_QUALITIES.map(quality => (
-                  <TouchableOpacity
-                    key={quality}
-                    style={[
-                      paperStyles.optionButton, {flex:1, marginHorizontal: 2},
-                      entryFormSleepQuality === quality && paperStyles.optionButtonSelected
-                    ]}
-                    onPress={() => setEntryFormSleepQuality(quality)}
-                  >
-                    <Text style={[
-                      paperStyles.optionButtonText,
-                      entryFormSleepQuality === quality && paperStyles.optionButtonTextSelected
-                    ]}>
-                      {quality}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={paperStyles.formLabel}>Goals Achieved (Optional, comma-separated):</Text>
-              <TextInput
-                style={paperStyles.formInput}
-                placeholder="e.g., Exercise, Read, Meditate"
-                value={entryFormGoalsInput}
-                onChangeText={setEntryFormGoalsInput}
-              />
-
-              <Text style={paperStyles.formLabel}>Challenges Faced (Optional, comma-separated):</Text>
-              <TextInput
-                style={paperStyles.formInput}
-                placeholder="e.g., Work stress, Missed workout"
-                value={entryFormChallengesInput}
-                onChangeText={setEntryFormChallengesInput}
-              />
-
-              <Text style={paperStyles.formLabel}>Tags (Optional, comma-separated):</Text>
-              <TextInput
-                style={paperStyles.formInput}
-                placeholder="e.g., work, travel, reflection"
-                value={entryFormTagsInput}
-                onChangeText={setEntryFormTagsInput}
-              />
-
-              <Text style={paperStyles.formLabel}>Location (Optional):</Text>
-              <TextInput
-                style={paperStyles.formInput}
-                placeholder="e.g., Home, Paris"
-                value={entryFormLocation}
-                onChangeText={setEntryFormLocation}
-              />
-
-              <View style={paperStyles.modalActions}>
-                <TouchableOpacity
-                  style={[paperStyles.modalButtonBase, paperStyles.modalSecondaryButton]}
-                  onPress={() => setIsModalEditorOpen(false)}
-                >
-                  <Text style={paperStyles.modalSecondaryButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[paperStyles.modalButtonBase, paperStyles.primaryButton]}
-                  onPress={processAndSaveDiaryEntry}
-                >
-                  <Text style={paperStyles.buttonText}>{currentEditingEntry ? 'Save Changes' : 'Add Entry'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>

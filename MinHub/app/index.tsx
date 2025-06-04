@@ -1,47 +1,57 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Redirect } from 'expo-router';
+import { Redirect, SplashScreen } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 const ONBOARDING_COMPLETED_KEY = 'minhub_onboarding_completed';
+const PIN_ENABLED_KEY = 'minhub_pin_enabled_status';
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [pinEnabled, setPinEnabled] = useState<boolean | null>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      console.log('[IndexScreen] Checking onboarding status...');
+    SplashScreen.preventAutoHideAsync();
+
+    const checkAppStatus = async () => {
       try {
-        const value = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
-        console.log('[IndexScreen] Value read from AsyncStorage for ONBOARDING_COMPLETED_KEY:', value); 
-        setOnboardingCompleted(value === 'true');
+        const onboardingStatus = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
+        const pinStatus = await AsyncStorage.getItem(PIN_ENABLED_KEY);
+
+        setOnboardingCompleted(onboardingStatus === 'true');
+        setPinEnabled(pinStatus === 'true');
+
       } catch (e) {
-        console.error('[IndexScreen] Error loading ONBOARDING_COMPLETED_KEY:', e);
+        console.error('[IndexScreen] Error loading app status:', e);
         setOnboardingCompleted(false);
+        setPinEnabled(false);
       } finally {
         setIsLoading(false);
+        SplashScreen.hideAsync();
       }
     };
 
-    checkOnboardingStatus();
+    checkAppStatus();
   }, []);
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#641E7A" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
 
-  console.log('[IndexScreen] Onboarding completed state before redirect:', onboardingCompleted); 
-
   if (onboardingCompleted) {
-    console.log('[IndexScreen] Redirecting to /home');
-    return <Redirect href="/home" />;
+    if (pinEnabled) {
+      return <Redirect href="/enter-pin" />;
+    } else {
+      return <Redirect href="/home" />;
+    }
   } else {
-    console.log('[IndexScreen] Redirecting to /tutorial');
     return <Redirect href="/tutorial" />;
   }
 }
@@ -51,6 +61,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f4f8',
   },
 });

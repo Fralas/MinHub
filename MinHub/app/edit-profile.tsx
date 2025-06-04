@@ -1,18 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from 'expo-router'; // useRouter non era usato, useNavigation sì
+import { useNavigation } from 'expo-router';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useTheme } from '../src/contexts/ThemeContext';
 
 const USER_PROFILE_KEY = 'minhub_user_profile_data';
 
@@ -35,10 +34,26 @@ const validateEmailFormat = (emailToValidate: string): boolean => {
   return emailRegex.test(emailToValidate);
 };
 
+const lightPurplePalette = {
+  primary: '#8A63D2',
+  background: '#F5F3F9',
+  card: '#FFFFFF',
+  text: '#1A202C',
+  labelText: '#553c9a', 
+  subtleText: '#A0AEC0',
+  border: '#DCD7E7',    
+  danger: '#E53E3E',       
+  chipSelectedText: '#FFFFFF',
+  chipText: '#8A63D2', 
+  chipBackground: '#EDE9F6',
+  saveButtonBackground: '#8A63D2',
+  saveButtonText: '#FFFFFF',
+};
+
+
 export default function EditProfileScreen() {
-  const { theme } = useTheme();
   const navigation = useNavigation();
-  const styles = createThemedStyles(theme);
+  const styles = createThemedStyles(lightPurplePalette);
 
   const [isLoading, setIsLoading] = useState(true);
   const [accountName, setAccountName] = useState('');
@@ -101,7 +116,7 @@ export default function EditProfileScreen() {
     try {
       await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
       Alert.alert("Profile Updated", "Your profile has been saved successfully.");
-      setOriginalProfile(updatedProfile); // Aggiorna lo stato originale con i dati salvati
+      setOriginalProfile(updatedProfile);
     } catch (error) {
       console.error("Failed to save profile data", error);
       Alert.alert("Error", "Could not save profile data.");
@@ -119,100 +134,93 @@ export default function EditProfileScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
         headerRight: () => (
-            <TouchableOpacity onPress={handleSaveProfile} style={{ marginRight: 15 }}>
-                <Text style={{ color: theme.primary, fontSize: 17, fontWeight: '600' }}>Save</Text>
+            <TouchableOpacity onPress={handleSaveProfile} style={styles.saveButton} disabled={isLoading}>
+                <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
         ),
+        headerStyle: {
+            backgroundColor: lightPurplePalette.background,
+            shadowOpacity: 0, 
+            elevation: 0,
+        },
+        headerTitleStyle: {
+            color: lightPurplePalette.text,
+            fontWeight: 'bold',
+        },
+        headerTintColor: lightPurplePalette.primary 
     });
-  }, [navigation, accountName, age, email, profession, selectedHobbies, theme.primary]);
+  }, [navigation, accountName, age, email, profession, selectedHobbies, isLoading, styles]);
 
 
   if (isLoading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color={lightPurplePalette.primary} />
       </View>
     );
   }
 
+  const renderInput = (label: string, value: string, onChangeText: (text: string) => void, placeholder: string, keyboardType: 'default' | 'numeric' | 'email-address' = 'default', error?: string) => (
+    <View style={styles.formGroup}>
+        <Text style={styles.label}>{label}</Text>
+        <TextInput
+            style={[styles.input, error ? styles.inputError : {}]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            keyboardType={keyboardType}
+            autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
+            placeholderTextColor={lightPurplePalette.subtleText}
+            selectionColor={lightPurplePalette.primary} 
+        />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-    <ScrollView contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled">
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Account Name</Text>
-          <TextInput
-            style={styles.input}
-            value={accountName}
-            onChangeText={setAccountName}
-            placeholder="Your account name"
-            placeholderTextColor={theme.subtleText}
-          />
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Age</Text>
-          <TextInput
-            style={styles.input}
-            value={age}
-            onChangeText={setAge}
-            placeholder="Your age"
-            keyboardType="numeric"
-            placeholderTextColor={theme.subtleText}
-          />
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[styles.input, emailError ? styles.inputError : {}]}
-            value={email}
-            onChangeText={handleEmailChange}
-            placeholder="your@email.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholderTextColor={theme.subtleText}
-            onBlur={() => validateEmailFormat(email) ? setEmailError('') : setEmailError('Invalid email format.')}
-          />
-          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Profession</Text>
-          <View style={styles.optionsRowContainer}>
-            {ProfessionOptions.map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[styles.optionChip, profession === option && styles.optionChipSelected]}
-                onPress={() => setProfession(option)}
-              >
-                <Text style={[styles.optionChipText, profession === option && styles.optionChipTextSelected]}>{option}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Hobbies</Text>
-          <View style={styles.optionsRowContainer}>
-            {HobbyOptions.map(hobby => (
-              <TouchableOpacity
-                key={hobby}
-                style={[styles.optionChip, selectedHobbies.includes(hobby) && styles.optionChipSelected]}
-                onPress={() => toggleHobby(hobby)}
-              >
-                <Text style={[styles.optionChipText, selectedHobbies.includes(hobby) && styles.optionChipTextSelected]}>{hobby}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </SafeAreaView>
-    </ScrollView>
+      <ScrollView contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled">
+        <SafeAreaView style={styles.safeArea}>
+            {renderInput('Account Name', accountName, setAccountName, 'E.g. John Doe')}
+            {renderInput('Age', age, setAge, 'E.g. 25', 'numeric')}
+            {renderInput('Email', email, handleEmailChange, 'your.email@example.com', 'email-address', emailError)}
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Profession</Text>
+              <View style={styles.optionsRowContainer}>
+                {ProfessionOptions.map(option => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.optionChip, profession === option && styles.optionChipSelected]}
+                    onPress={() => setProfession(option)}
+                  >
+                    <Text style={[styles.optionChipText, profession === option && styles.optionChipTextSelected]}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Hobbies</Text>
+              <View style={styles.optionsRowContainer}>
+                {HobbyOptions.map(hobby => (
+                  <TouchableOpacity
+                    key={hobby}
+                    style={[styles.optionChip, selectedHobbies.includes(hobby) && styles.optionChipSelected]}
+                    onPress={() => toggleHobby(hobby)}
+                  >
+                    <Text style={[styles.optionChipText, selectedHobbies.includes(hobby) && styles.optionChipTextSelected]}>{hobby}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+        </SafeAreaView>
+      </ScrollView>
     </View>
   );
 }
 
-const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
+const createThemedStyles = (theme: typeof lightPurplePalette) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -223,39 +231,41 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       alignItems: 'center',
     },
     scrollContentContainer: {
-      paddingBottom: 30,
+      paddingBottom: 40,
     },
     safeArea: {
       flex: 1,
       paddingHorizontal: 20,
-      paddingTop: 20,
+      paddingTop: 24,
     },
     formGroup: {
-      marginBottom: 25,
+      marginBottom: 30, 
     },
     label: {
-      fontSize: 16,
-      color: theme.text,
-      marginBottom: 10,
-      fontWeight: '600',
+      fontSize: 17, 
+      color: theme.labelText, 
+      marginBottom: 14, 
+      fontWeight: '700', 
+      letterSpacing: 0.3, 
     },
     input: {
       backgroundColor: theme.card,
       color: theme.text,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: theme.border,
-      borderRadius: 10,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      fontSize: 17,
+      borderRadius: 14, 
+      paddingVertical: 18,
+      paddingHorizontal: 18, 
+      fontSize: 16,
     },
     inputError: {
       borderColor: theme.danger,
+      borderWidth: 1.5,
     },
     errorText: {
       color: theme.danger,
-      fontSize: 13,
-      marginTop: 5,
+      fontSize: 14,
+      marginTop: 8,
     },
     optionsRowContainer: {
       flexDirection: 'row',
@@ -263,23 +273,35 @@ const createThemedStyles = (theme: import('../src/styles/themes').Theme) =>
       gap: 12,
     },
     optionChip: {
-      backgroundColor: theme.card,
-      paddingVertical: 10,
-      paddingHorizontal: 18,
-      borderRadius: 20,
+      backgroundColor: theme.chipBackground,
+      paddingVertical: 12, 
+      paddingHorizontal: 22, 
+      borderRadius: 22, 
       borderWidth: 1.5,
-      borderColor: theme.primary,
+      borderColor: theme.chipBackground, 
     },
     optionChipSelected: {
       backgroundColor: theme.primary,
-      borderColor: theme.primary,
+      borderColor: theme.primary, 
     },
     optionChipText: {
-      color: theme.primary,
+      color: theme.chipText, 
       fontSize: 15,
-      fontWeight: '500',
+      fontWeight: '600',
     },
     optionChipTextSelected: {
-      color: theme.card,
+      color: theme.chipSelectedText, 
     },
+    saveButton: {
+        backgroundColor: theme.saveButtonBackground,
+        paddingHorizontal: 22,
+        paddingVertical: 10, 
+        borderRadius: 22,    
+        marginRight: 10, 
+    },
+    saveButtonText: {
+        color: theme.saveButtonText, 
+        fontSize: 17, 
+        fontWeight: 'bold',
+    }
   });
